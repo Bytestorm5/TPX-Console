@@ -1,0 +1,35 @@
+{
+  "name": "@tpx/auth-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "tpx-auth: tenants, projects, environments, membership, grants and audit — the console's Alfiz org root, stored in Convex.",
+  "type": "module",
+  "scripts": {
+    "typegen": "wrangler types --include-runtime=false",
+    "typecheck": "pnpm typegen && tsc -p tsconfig.json",
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy",
+    "deploy": "wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist"
+  },
+  "dependencies": {
+    "@alfiz/application": "0.8.1",
+    "@alfiz/core": "0.8.1",
+    "@tpx/contracts": "workspace:*",
+    "@tpx/convex-client": "workspace:*",
+    "@tpx/identity": "workspace:*",
+    "convex": "1.46.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.1.12",
+    "@cloudflare/workers-types": "5.20260917.1",
+    "convex-test": "0.0.59",
+    "typescript": "5.9.3",
+    "vite": "8.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.134.0"
+  }
+}

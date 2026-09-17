@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // tpx-web — the only public Worker: assets, SSR, the API forwarder, and a
+  // service binding to every backend service. The topology (routes, bindings)
+  // is committed here; plain vars and secrets live in the dashboard with
+  // keep_vars so a deploy never removes them.
+  "name": "tpx-web",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./build/client" },
+  "observability": { "enabled": true },
+  "keep_vars": true,
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "console.trusplex.com", "custom_domain": true }],
+  "vars": {
+    // The publishable key is public by design; the secret key is a secret.
+    "CLERK_PUBLISHABLE_KEY": "pk_test_REPLACE_ME",
+    // Products without a service yet, shown as "preview" so their nav group exists.
+    "TPX_PREVIEW_PRODUCTS": "",
+  },
+  "secrets": {
+    "required": ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET"],
+  },
+  "services": [
+    { "binding": "AUTH", "service": "tpx-auth" },
+    { "binding": "CONNECTIONS", "service": "tpx-connections" },
+  ],
+  "env": {
+    "staging": {
+      "name": "tpx-web-staging",
+      "workers_dev": false,
+      "preview_urls": false,
+      "keep_vars": true,
+      "routes": [{ "pattern": "console-staging.trusplex.com", "custom_domain": true }],
+      "vars": {
+        "CLERK_PUBLISHABLE_KEY": "pk_test_REPLACE_ME",
+        "TPX_PREVIEW_PRODUCTS": "operator,dispatcher,integrator",
+      },
+      "secrets": { "required": ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET"] },
+      "services": [
+        { "binding": "AUTH", "service": "tpx-auth-staging" },
+        { "binding": "CONNECTIONS", "service": "tpx-connections-staging" },
+      ],
+    },
+  },
+}

@@ -1,0 +1,31 @@
+{
+  "name": "tpx-console",
+  "private": true,
+  "description": "Trusplex Console — one repository, many Workers, one public application.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @tpx/web dev",
+    "build": "pnpm --filter @tpx/web build",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:ui": "pnpm --filter @tpx/web test:ui",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:service-routes": "node scripts/check-service-routes.mjs",
+    "check": "pnpm typecheck && pnpm lint && pnpm check:boundaries && pnpm check:service-routes && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.10.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "prettier": "3.9.8",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

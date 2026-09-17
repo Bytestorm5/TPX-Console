@@ -1,0 +1,30 @@
+{
+  "name": "@tpx/identity",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The console's Alfiz catalog, scope helpers, seed roles, grant evaluation and the read-only remote provider tpx-web attaches to tpx-auth with.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog": "./src/catalog.ts",
+    "./scopes": "./src/scopes.ts",
+    "./roles": "./src/roles.ts",
+    "./grants": "./src/grants.ts",
+    "./errors": "./src/errors.ts",
+    "./provider": "./src/provider.ts",
+    "./session": "./src/session.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@alfiz/core": "0.8.1",
+    "@tpx/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@alfiz/application": "0.8.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

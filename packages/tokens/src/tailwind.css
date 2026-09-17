@@ -1,0 +1,64 @@
+/*
+ * The shared Tailwind v4 theme for the whole frontend. Consumers write
+ *
+ *   @import "@tpx/tokens/fonts.css";     (first: a url() import must precede everything else)
+ *   @import "tailwindcss";
+ *   @import "@tpx/tokens/tailwind.css";
+ *
+ * and use `bg-surface`, `text-ink-muted`, `border-border-subtle`,
+ * `bg-accent text-on-accent`, `rounded-md`, `font-sans`. Every utility maps to
+ * a custom property from tokens.css, so theme switching needs no rebuild and
+ * product code never carries a raw hex or px value.
+ */
+@import "./tokens.css";
+
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-surface: var(--tpx-surface);
+  --color-surface-raised: var(--tpx-surface-raised);
+  --color-surface-sunken: var(--tpx-surface-sunken);
+  --color-ink: var(--tpx-ink);
+  --color-ink-muted: var(--tpx-ink-muted);
+  --color-border: var(--tpx-border-default);
+  --color-border-subtle: var(--tpx-border-subtle);
+  --color-accent: var(--tpx-accent);
+  --color-on-accent: var(--tpx-on-accent);
+  --color-accent-soft: var(--tpx-accent-soft);
+  --color-success: var(--tpx-success);
+  --color-warning: var(--tpx-warning);
+  --color-danger: var(--tpx-danger);
+  --color-focus: var(--tpx-focus-ring);
+  --color-violet: var(--tpx-violet);
+  --color-bayside: var(--tpx-bayside-blue);
+  --color-blue: var(--tpx-blue);
+  --color-ebony: var(--tpx-ebony-black);
+  --color-white: var(--tpx-white);
+  --color-graphite: var(--tpx-graphite);
+  --color-space: var(--tpx-space);
+  --color-steel: var(--tpx-steel);
+  --color-smoke: var(--tpx-smoke);
+  --color-cloud: var(--tpx-cloud);
+
+  --font-sans: var(--tpx-font-sans);
+  --font-mono: var(--tpx-font-mono);
+
+  --radius-*: initial;
+  --radius-none: 0px;
+  --radius-sm: var(--tpx-radius-sm);
+  --radius-md: var(--tpx-radius-md);
+  --radius-lg: var(--tpx-radius-lg);
+  --radius-full: var(--tpx-radius-full);
+
+  --shadow-sm: var(--tpx-shadow-sm);
+  --shadow-md: var(--tpx-shadow-md);
+
+  --spacing-gutter-1: var(--tpx-space-1);
+  --spacing-gutter-2: var(--tpx-space-2);
+  --spacing-gutter-3: var(--tpx-space-3);
+  --spacing-gutter-4: var(--tpx-space-4);
+  --spacing-sidebar: var(--tpx-sidebar-width);
+
+  --background-image-brand: var(--tpx-gradient-brand);
+}

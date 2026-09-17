@@ -1,0 +1,108 @@
+/*
+ * Trusplex design tokens — CSS custom properties.
+ *
+ * Source: the Trusplex design system (tokens.json v1). Values under
+ * "console additions" are deliberate extensions for the console (status
+ * colours, a sunken surface, a soft accent) and are mirrored in index.ts.
+ *
+ * Theming: light is the default; dark applies with the system preference
+ * unless <html data-theme="light"> pins light, and <html data-theme="dark">
+ * pins dark regardless of the preference.
+ */
+:root {
+  /* palette */
+  --tpx-violet: #746df8;
+  --tpx-bayside-blue: #1c83ea;
+  --tpx-blue: #0039d8;
+  --tpx-ebony-black: #0b0b1b;
+  --tpx-white: #ffffff;
+  --tpx-graphite: #6e7180;
+  --tpx-space: #9da2b3;
+  --tpx-steel: #bcbfcc;
+  --tpx-smoke: #d3d6e0;
+  --tpx-cloud: #edeff7;
+
+  /* semantic — light */
+  --tpx-surface: #ffffff;
+  --tpx-surface-raised: #edeff7;
+  --tpx-surface-sunken: #f6f7fb;
+  --tpx-ink: #0b0b1b;
+  --tpx-ink-muted: #6e7180;
+  --tpx-border-default: #bcbfcc;
+  --tpx-border-subtle: #d3d6e0;
+  --tpx-accent: #0039d8;
+  --tpx-on-accent: #ffffff;
+  --tpx-accent-soft: #e6ecff;
+  --tpx-success: #1b7f4c;
+  --tpx-warning: #9a6200;
+  --tpx-danger: #b3261e;
+  --tpx-focus-ring: #1c83ea;
+
+  /* spacing (8px-based, inferred from the kit's card and button proportions) */
+  --tpx-space-1: 8px;
+  --tpx-space-2: 16px;
+  --tpx-space-3: 24px;
+  --tpx-space-4: 40px;
+
+  /* radius — radius-full is the logo mark's own stadium terminal */
+  --tpx-radius-sm: 8px;
+  --tpx-radius-md: 16px;
+  --tpx-radius-lg: 24px;
+  --tpx-radius-full: 9999px;
+
+  /* type */
+  --tpx-font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --tpx-font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* brand */
+  --tpx-gradient-brand: linear-gradient(135deg, #746df8 0%, #1c83ea 50%, #0039d8 100%);
+
+  /* layout */
+  --tpx-sidebar-width: 272px;
+  --tpx-shadow-sm: 0 1px 2px rgb(11 11 27 / 0.06), 0 1px 3px rgb(11 11 27 / 0.08);
+  --tpx-shadow-md: 0 4px 12px rgb(11 11 27 / 0.1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tpx-surface: #0b0b1b;
+    --tpx-surface-raised: #14142a;
+    --tpx-surface-sunken: #070712;
+    --tpx-ink: #ffffff;
+    --tpx-ink-muted: #9da2b3;
+    --tpx-border-default: #6e7180;
+    --tpx-border-subtle: #2a2b45;
+    --tpx-accent: #1c83ea;
+    --tpx-on-accent: #0b0b1b;
+    --tpx-accent-soft: #14243f;
+    --tpx-success: #4cc38a;
+    --tpx-warning: #e8b13e;
+    --tpx-danger: #ff6b6b;
+    --tpx-focus-ring: #1c83ea;
+    --tpx-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --tpx-shadow-md: 0 4px 16px rgb(0 0 0 / 0.55);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --tpx-surface: #0b0b1b;
+  --tpx-surface-raised: #14142a;
+  --tpx-surface-sunken: #070712;
+  --tpx-ink: #ffffff;
+  --tpx-ink-muted: #9da2b3;
+  --tpx-border-default: #6e7180;
+  --tpx-border-subtle: #2a2b45;
+  --tpx-accent: #1c83ea;
+  --tpx-on-accent: #0b0b1b;
+  --tpx-accent-soft: #14243f;
+  --tpx-success: #4cc38a;
+  --tpx-warning: #e8b13e;
+  --tpx-danger: #ff6b6b;
+  --tpx-focus-ring: #1c83ea;
+  --tpx-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --tpx-shadow-md: 0 4px 16px rgb(0 0 0 / 0.55);
+  color-scheme: dark;
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // tpx-connections — credentials, connector implementations, capability
+  // contracts, scope resolution, audit log. Reachable ONLY through a service
+  // binding from tpx-web (and, later, from product services): no routes, no
+  // workers.dev hostname, no preview URLs.
+  //
+  // Secrets: CONVEX_DEPLOY_KEY reaches the service's own Convex deployment;
+  // CONNECTIONS_MASTER_KEY (base64, 32 bytes) wraps every per-secret data key.
+  // Rotate by moving the old value to CONNECTIONS_MASTER_KEY_PREVIOUS and
+  // issuing a new CONNECTIONS_MASTER_KEY: old rows keep decrypting, new writes
+  // use the new key, and re-saving a secret migrates it.
+  "name": "tpx-connections",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true },
+  "keep_vars": true,
+  "vars": {
+    "CONVEX_URL": "https://REPLACE-ME.convex.cloud",
+  },
+  "secrets": {
+    "required": ["CONVEX_DEPLOY_KEY", "CONNECTIONS_MASTER_KEY"],
+  },
+  "env": {
+    "staging": {
+      "name": "tpx-connections-staging",
+      "workers_dev": false,
+      "preview_urls": false,
+      "keep_vars": true,
+      "vars": {
+        "CONVEX_URL": "https://REPLACE-ME-staging.convex.cloud",
+      },
+      "secrets": {
+        "required": ["CONVEX_DEPLOY_KEY", "CONNECTIONS_MASTER_KEY"],
+      },
+    },
+  },
+}

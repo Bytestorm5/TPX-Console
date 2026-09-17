@@ -1,0 +1,47 @@
+{
+  "name": "@tpx/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "tpx-web: the console — the only public Worker. Assets, SSR, the API forwarder, every service binding.",
+  "type": "module",
+  "scripts": {
+    "dev": "react-router dev",
+    "dev:fixture": "TPX_DEV_FIXTURE=1 react-router dev",
+    "build": "react-router build",
+    "typegen": "wrangler types --include-runtime=false && react-router typegen",
+    "typecheck": "pnpm typegen && tsc -b",
+    "test": "vitest run",
+    "test:ui": "playwright test",
+    "deploy": "pnpm build && wrangler deploy",
+    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist-dry-run"
+  },
+  "dependencies": {
+    "@alfiz/core": "0.8.1",
+    "@clerk/react-router": "3.6.24",
+    "@tpx/contracts": "workspace:*",
+    "@tpx/identity": "workspace:*",
+    "@tpx/tokens": "workspace:*",
+    "@tpx/ui": "workspace:*",
+    "isbot": "5.2.2",
+    "lucide-react": "1.47.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router": "8.4.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.55.0",
+    "@cloudflare/workers-types": "5.20260917.1",
+    "@playwright/test": "1.63.0",
+    "@react-router/dev": "8.4.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.6.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vite": "8.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.134.0"
+  }
+}

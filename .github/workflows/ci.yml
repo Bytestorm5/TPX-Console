@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, boundaries, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Boundary rules (no cross-product / service-to-service imports)
+        run: pnpm check:boundaries
+      - name: No public routes on service Workers
+        run: pnpm check:service-routes
+      - name: Generate Worker types
+        run: pnpm -r --workspace-concurrency=1 typegen
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - name: Build web
+        run: pnpm --filter @tpx/web build
+      - name: Dry-run deploys (validates every wrangler.jsonc)
+        run: pnpm -r --workspace-concurrency=1 deploy:dry-run

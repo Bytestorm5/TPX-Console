@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-dry-run
+build
+.react-router
+.wrangler
+pnpm-lock.yaml
+worker-configuration.d.ts
+**/convex/_generated
+test-results
+playwright-report

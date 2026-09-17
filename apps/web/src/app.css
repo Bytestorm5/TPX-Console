@@ -1,0 +1,31 @@
+@import "@tpx/tokens/fonts.css";
+@import "tailwindcss";
+@import "@tpx/tokens/tailwind.css";
+
+/* Shared components live outside this app's source tree. */
+@source "../../../packages/ui/src";
+
+html,
+body {
+  background: var(--tpx-surface);
+  color: var(--tpx-ink);
+  font-family: var(--tpx-font-sans);
+  letter-spacing: -0.01em;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+::selection {
+  background: var(--tpx-accent-soft);
+}
+
+/* Clerk components inherit the brand type. */
+.cl-rootBox,
+.cl-card,
+.cl-userButtonPopoverCard,
+.cl-organizationSwitcherPopoverCard {
+  font-family: var(--tpx-font-sans);
+}

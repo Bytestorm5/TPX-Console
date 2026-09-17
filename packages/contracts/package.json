@@ -1,0 +1,29 @@
+{
+  "name": "@tpx/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RPC types and zod schemas shared by tpx-web and every service, one module per service, plus the event bus definitions.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./scope": "./src/scope.ts",
+    "./product": "./src/product.ts",
+    "./auth": "./src/auth.ts",
+    "./connections": "./src/connections.ts",
+    "./events": "./src/events.ts",
+    "./operator": "./src/operator.ts",
+    "./dispatcher": "./src/dispatcher.ts",
+    "./integrator": "./src/integrator.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

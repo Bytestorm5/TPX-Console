@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+CONVEX_DEPLOY_KEY=dev:your-deployment|your-deploy-key
+# 32 random bytes, base64: `openssl rand -base64 32`
+CONNECTIONS_MASTER_KEY=

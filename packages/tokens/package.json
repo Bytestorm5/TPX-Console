@@ -1,0 +1,25 @@
+{
+  "name": "@tpx/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trusplex design tokens: CSS custom properties, the Tailwind v4 theme, and the same values for JS consumers.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./tokens.css": "./src/tokens.css",
+    "./tailwind.css": "./src/tailwind.css",
+    "./fonts.css": "./src/fonts.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
