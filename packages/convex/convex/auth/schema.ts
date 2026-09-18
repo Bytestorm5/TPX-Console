@@ -1,22 +1,19 @@
 /**
- * tpx-auth's Convex schema.
- *
- * Two families of tables: tenancy (tenants, projects, environments, the
- * tenant audit log) and the Alfiz storage seam (grants, revokes, roles,
- * groups, users, requests, catalog, audit, and the persisted invalidation
- * log). One Convex deployment per service; tenancy is expressed by scope and
- * subject, never by table.
+ * tpx-auth's tables (prefix `auth_`): tenancy (tenants, projects,
+ * environments, users, memberships, invites, the tenant audit log) and the
+ * Alfiz storage seam (grants, revokes, roles, groups, users, requests,
+ * catalog, audit, the persisted invalidation log).
  *
  * Every row keeps its own opaque id (`grantId`, `projectId`, …) beside the
  * Convex `_id`: Alfiz assigns ids, and the console's URLs and grants reference
  * them, so they must not be Convex document ids.
  */
-import { defineSchema, defineTable } from "convex/server";
+import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
-export default defineSchema({
+export const authTables = {
   // -- tenancy ---------------------------------------------------------------
-  tenants: defineTable({
+  auth_tenants: defineTable({
     tenantId: v.string(),
     name: v.string(),
     environments: v.array(v.string()),
@@ -25,7 +22,7 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_tenantId", ["tenantId"]),
 
-  projects: defineTable({
+  auth_projects: defineTable({
     projectId: v.string(),
     tenantId: v.string(),
     slug: v.string(),
@@ -37,7 +34,7 @@ export default defineSchema({
     .index("by_tenant_slug", ["tenantId", "slug"])
     .index("by_tenant", ["tenantId", "createdAt"]),
 
-  environments: defineTable({
+  auth_environments: defineTable({
     environmentId: v.string(),
     tenantId: v.string(),
     projectId: v.string(),
@@ -49,7 +46,7 @@ export default defineSchema({
     .index("by_project", ["projectId", "createdAt"])
     .index("by_tenant", ["tenantId", "createdAt"]),
 
-  tenantAudit: defineTable({
+  auth_tenantAudit: defineTable({
     auditId: v.string(),
     tenantId: v.string(),
     at: v.number(),
@@ -59,8 +56,44 @@ export default defineSchema({
     detail: v.optional(v.any()),
   }).index("by_tenant_at", ["tenantId", "at"]),
 
+  /** Profile cache: identity comes from Clerk, the console keeps what it needs to show members. */
+  auth_users: defineTable({
+    userId: v.string(),
+    email: v.union(v.string(), v.null()),
+    displayName: v.union(v.string(), v.null()),
+    imageUrl: v.union(v.string(), v.null()),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_email", ["email"]),
+
+  /** Tenant membership — the console's own, mirrored into Alfiz's directory as the user's org ids. */
+  auth_memberships: defineTable({
+    tenantId: v.string(),
+    userId: v.string(),
+    joinedAt: v.number(),
+    invitedBy: v.union(v.string(), v.null()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tenant", ["tenantId", "joinedAt"])
+    .index("by_tenant_user", ["tenantId", "userId"]),
+
+  /** Pending invitations, keyed by lower-cased email; claimed on the invitee's first sign-in. */
+  auth_invites: defineTable({
+    inviteId: v.string(),
+    tenantId: v.string(),
+    email: v.string(),
+    roleId: v.string(),
+    invitedBy: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_inviteId", ["inviteId"])
+    .index("by_tenant", ["tenantId", "createdAt"])
+    .index("by_email", ["email"])
+    .index("by_tenant_email", ["tenantId", "email"]),
+
   // -- the Alfiz storage seam ------------------------------------------------
-  alfizGrants: defineTable({
+  auth_alfizGrants: defineTable({
     grantId: v.string(),
     subject: v.string(),
     roleId: v.optional(v.string()),
@@ -75,7 +108,7 @@ export default defineSchema({
     .index("by_scope", ["scope"])
     .index("by_roleId", ["roleId"]),
 
-  alfizRevokes: defineTable({
+  auth_alfizRevokes: defineTable({
     revokeId: v.string(),
     userId: v.string(),
     pattern: v.string(),
@@ -87,7 +120,7 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_scope", ["scope"]),
 
-  alfizRoles: defineTable({
+  auth_alfizRoles: defineTable({
     roleId: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
@@ -95,7 +128,7 @@ export default defineSchema({
     requestable: v.optional(v.any()),
   }).index("by_roleId", ["roleId"]),
 
-  alfizGroups: defineTable({
+  auth_alfizGroups: defineTable({
     groupId: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
@@ -103,7 +136,7 @@ export default defineSchema({
     virtual: v.boolean(),
   }).index("by_groupId", ["groupId"]),
 
-  alfizUsers: defineTable({
+  auth_alfizUsers: defineTable({
     userId: v.string(),
     active: v.boolean(),
     groupIds: v.array(v.string()),
@@ -111,14 +144,14 @@ export default defineSchema({
     managerUserId: v.union(v.string(), v.null()),
   }).index("by_userId", ["userId"]),
 
-  alfizMemberships: defineTable({
+  auth_alfizMemberships: defineTable({
     userId: v.string(),
     groupId: v.string(),
   })
     .index("by_groupId", ["groupId"])
     .index("by_userId", ["userId"]),
 
-  alfizRequests: defineTable({
+  auth_alfizRequests: defineTable({
     requestId: v.string(),
     requesterUserId: v.string(),
     state: v.string(),
@@ -130,19 +163,19 @@ export default defineSchema({
     .index("by_requester", ["requesterUserId", "createdAt"])
     .index("by_createdAt", ["createdAt"]),
 
-  alfizCatalog: defineTable({
+  auth_alfizCatalog: defineTable({
     version: v.number(),
     document: v.any(),
     publishedAt: v.number(),
   }).index("by_version", ["version"]),
 
-  alfizImports: defineTable({
+  auth_alfizImports: defineTable({
     key: v.literal("singleton"),
     version: v.number(),
     manifest: v.any(),
   }).index("by_key", ["key"]),
 
-  alfizAudit: defineTable({
+  auth_alfizAudit: defineTable({
     auditId: v.string(),
     at: v.number(),
     actor: v.string(),
@@ -157,13 +190,13 @@ export default defineSchema({
     .index("by_actor", ["actor", "at", "auditId"])
     .index("by_action", ["action", "at", "auditId"]),
 
-  alfizEpoch: defineTable({
+  auth_alfizEpoch: defineTable({
     key: v.literal("singleton"),
     seq: v.number(),
     prunedThrough: v.number(),
   }).index("by_key", ["key"]),
 
-  alfizEvents: defineTable({
+  auth_alfizEvents: defineTable({
     seq: v.number(),
     type: v.string(),
     payload: v.any(),
@@ -171,4 +204,4 @@ export default defineSchema({
   })
     .index("by_seq", ["seq"])
     .index("by_at", ["at"]),
-});
+};

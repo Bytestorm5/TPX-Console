@@ -46,73 +46,147 @@ async function status(promise: Promise<unknown>): Promise<number | null> {
   }
 }
 
-describe("tenant bootstrap", () => {
-  it("creates the tenant with a prod-only vocabulary, a default project, and an owner", async () => {
-    const tenant = await service.ensureTenant({ orgId: "org_a", name: "Ada's Org", creatorUserId: "ada" });
-    expect(tenant).toMatchObject({ id: "org_a", environments: ["prod"], projectDefaults: ["prod"], createdBy: "ada" });
-    const again = await service.ensureTenant({ orgId: "org_a", name: "Renamed", creatorUserId: "someone-else" });
-    expect(again.name).toBe("Ada's Org");
+const ADA = { email: "ada@example.test", displayName: "Ada Lovelace", imageUrl: null };
 
-    expect(await service.findTenant("org_missing")).toBeNull();
-    expect((await service.findTenant("org_a"))?.name).toBe("Ada's Org");
-    const scope = await service.resolveScope({ tenantId: "org_a", projectSlug: "default", environmentName: null });
+/** Ingress for a user: profile stored, invitations claimed, a default tenant when they have none. */
+async function signIn(userId: string, email = `${userId}@example.test`, displayName = userId) {
+  return service.ensureUser({ userId, profile: { email, displayName, imageUrl: null } });
+}
+
+/** The fixture most tests start from: ada signs in and gets "Ada's Org" (id captured as `org_a`). */
+async function bootstrap(): Promise<string> {
+  const session = await signIn("ada", ADA.email, ADA.displayName);
+  return session.tenants[0]!.id;
+}
+
+describe("tenant bootstrap", () => {
+  it("gives a new user a default tenant with a prod-only vocabulary, a default project, and ownership", async () => {
+    const session = await signIn("ada", ADA.email, ADA.displayName);
+    expect(session.user).toMatchObject({ userId: "ada", email: ADA.email, displayName: ADA.displayName });
+    expect(session.tenants).toHaveLength(1);
+    const tenantId = session.tenants[0]!.id;
+    expect(session.tenants[0]!.name).toBe("Ada's Org");
+    expect(tenantId).toMatch(/^tnt_/);
+    expect(await service.findTenant(tenantId)).toMatchObject({
+      environments: ["prod"],
+      projectDefaults: ["prod"],
+      createdBy: "ada",
+    });
+    expect(await service.findTenant("tnt_missing")).toBeNull();
+
+    // An unknown user without a profile gets nothing yet: tpx-web sends the profile and calls again.
+    const unknown = await service.ensureUser({ userId: "ghost" });
+    expect(unknown).toEqual({ user: null, tenants: [] });
+
+    // Idempotent: signing in again (with or without the profile) creates nothing new.
+    expect((await service.ensureUser({ userId: "ada" })).tenants).toHaveLength(1);
+    expect((await signIn("ada", ADA.email, ADA.displayName)).tenants).toHaveLength(1);
+
+    const scope = await service.resolveScope({ tenantId, projectSlug: "default", environmentName: null });
     expect(scope?.project.name).toBe("Default");
     expect(scope?.environment.name).toBe("prod");
     expect(scope?.environments).toHaveLength(1);
 
-    const ctx = await tenantCtx("ada", "org_a");
+    const ctx = await tenantCtx("ada", tenantId);
     expect(ctx.grants).toContain("tpx.workspace.access.manage_grants");
     expect(ctx.grants).toContain("tpx.workspace.projects.delete");
     const grants = await service.listGrants(ctx);
     expect(grants.map((g) => `${g.subject}:${g.roleId}`).sort()).toEqual([
-      `org:org_a:${ROLE_IDS.member}`,
+      `org:${tenantId}:${ROLE_IDS.member}`,
       `user:ada:${ROLE_IDS.owner}`,
     ]);
   });
 
-  it("makes every org member a member and mirrors Clerk admins, reversibly", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "Acme", creatorUserId: "ada" });
-    await service.ensureUser({ userId: "bob", orgId: "org_a", orgRole: "org:member" });
-    let bob = await tenantCtx("bob", "org_a");
+  it("lets a user create more tenants and rename them", async () => {
+    const first = await bootstrap();
+    const second = await service.createTenant({ name: "Acme", creatorUserId: "ada" });
+    expect(second.id).not.toBe(first);
+    const session = await service.ensureUser({ userId: "ada" });
+    expect(session.tenants.map((t) => t.name)).toEqual(["Ada's Org", "Acme"]);
+    const ctx = await tenantCtx("ada", second.id);
+    expect((await service.updateTenant(ctx, { name: "Acme Ltd" })).name).toBe("Acme Ltd");
+    expect(await status(service.updateTenant({ ...ctx, grants: [] }, { name: "Nope" }))).toBe(403);
+  });
+
+  it("invites by email: known users join at once, unknown ones on their first sign-in", async () => {
+    const tenantId = await bootstrap();
+    const ada = await tenantCtx("ada", tenantId);
+    await signIn("bob", "bob@example.test", "Bob");
+
+    const added = await service.inviteMember(ada, { email: "Bob@Example.test", roleId: ROLE_IDS.member });
+    expect(added.kind).toBe("added");
+    let bob = await tenantCtx("bob", tenantId);
     expect(bob.grants).toContain("tpx.connections.attachments.attach_connection");
     expect(bob.grants).not.toContain("tpx.workspace.access.manage_grants");
+    expect(await status(service.inviteMember(ada, { email: "bob@example.test", roleId: ROLE_IDS.member }))).toBe(409);
 
-    await service.ensureUser({ userId: "bob", orgId: "org_a", orgRole: "org:admin" });
-    bob = await tenantCtx("bob", "org_a");
-    expect(bob.grants).toContain("tpx.workspace.access.manage_grants");
-    expect(bob.grants).not.toContain("tpx.connections.connections.reveal_secret");
+    const invited = await service.inviteMember(ada, { email: "cat@example.test", roleId: ROLE_IDS.admin });
+    expect(invited.kind).toBe("invited");
+    expect((await service.listInvites(ada)).map((i) => i.email)).toEqual(["cat@example.test"]);
+    expect(await status(service.inviteMember(ada, { email: "cat@example.test", roleId: ROLE_IDS.admin }))).toBe(409);
+    expect(await status(service.inviteMember(ada, { email: "dan@example.test", roleId: "nope" }))).toBe(400);
 
-    // Demotion in Clerk removes exactly the mirrored grant.
-    await service.ensureUser({ userId: "bob", orgId: "org_a", orgRole: "org:member" });
-    bob = await tenantCtx("bob", "org_a");
-    expect(bob.grants).not.toContain("tpx.workspace.access.manage_grants");
+    // Cat signs in for the first time: the invitation becomes a membership, and no default tenant is created.
+    const cat = await signIn("cat", "cat@example.test", "Cat");
+    expect(cat.tenants.map((t) => t.id)).toEqual([tenantId]);
+    expect(await service.listInvites(ada)).toEqual([]);
+    const catCtx = await tenantCtx("cat", tenantId);
+    expect(catCtx.grants).toContain("tpx.workspace.access.manage_grants");
+    expect(catCtx.grants).not.toContain("tpx.connections.connections.reveal_secret");
 
-    // Leaving the org removes the membership and any tenant grants.
-    await service.removeMember({ orgId: "org_a", userId: "bob" });
-    bob = await tenantCtx("bob", "org_a");
+    const members = await service.listMembers(ada);
+    expect(members.map((m) => `${m.userId}:${m.roles.join("+")}`).sort()).toEqual([
+      `ada:${ROLE_IDS.owner}`,
+      `bob:${ROLE_IDS.member}`,
+      `cat:${ROLE_IDS.admin}`,
+    ]);
+    expect(members.find((m) => m.userId === "bob")?.email).toBe("bob@example.test");
+    expect(await status(service.listMembers({ ...ada, grants: [] }))).toBe(403);
+
+    // Removal sweeps the membership and every grant inside the tenant; the last owner cannot go.
+    await service.removeMember(ada, "bob");
+    bob = await tenantCtx("bob", tenantId);
     expect(bob.grants).toEqual([]);
+    expect((await service.ensureUser({ userId: "bob" })).tenants.map((t) => t.id)).not.toContain(tenantId);
+    expect(await status(service.removeMember(ada, "ada"))).toBe(409);
+    expect(await status(service.removeMember(ada, "nobody"))).toBe(404);
+
+    const revokable = await service.inviteMember(ada, { email: "eve@example.test", roleId: ROLE_IDS.viewer });
+    if (revokable.kind !== "invited") throw new Error("expected an invitation");
+    await service.revokeInvite(ada, revokable.invite.id);
+    expect(await service.listInvites(ada)).toEqual([]);
+    expect((await signIn("eve", "eve@example.test", "Eve")).tenants[0]!.name).toBe("Eve's Org");
+  });
+
+  it("forgets a user the identity provider deleted", async () => {
+    const tenantId = await bootstrap();
+    const ada = await tenantCtx("ada", tenantId);
+    await signIn("bob", "bob@example.test", "Bob");
+    await service.inviteMember(ada, { email: "bob@example.test", roleId: ROLE_IDS.member });
+    await service.forgetUser("bob");
+    expect((await service.listMembers(ada)).map((m) => m.userId)).toEqual(["ada"]);
+    expect((await tenantCtx("bob", tenantId)).grants).toEqual([]);
   });
 
   it("keeps tenants apart", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
-    await service.ensureTenant({ orgId: "org_b", name: "B", creatorUserId: "bea" });
-    const adaInB = await tenantCtx("ada", "org_b");
+    const orgA = await bootstrap();
+    const orgB = (await signIn("bea")).tenants[0]!.id;
+    const adaInB = await tenantCtx("ada", orgB);
     expect(adaInB.grants).toEqual([]);
     expect(await service.listProjects(adaInB)).toEqual([]);
     expect(await status(service.listGrants(adaInB))).toBe(403);
-    expect(
-      await service.resolveScope({ tenantId: "org_b", projectSlug: "default", environmentName: "dev" }),
-    ).toBeNull();
+    expect(await service.resolveScope({ tenantId: orgB, projectSlug: "default", environmentName: "dev" })).toBeNull();
+    expect(orgA).not.toBe(orgB);
   });
 });
 
 describe("projects and environments", () => {
   it("creates projects with the default environments and enforces the vocabulary", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
-    const ada = await tenantCtx("ada", "org_a");
+    const org_a = await bootstrap();
+    const ada = await tenantCtx("ada", org_a);
     const project = await service.createProject(ada, { name: "Client Site" });
     expect(project.slug).toBe("client-site");
-    const scope = await service.resolveScope({ tenantId: "org_a", projectSlug: "client-site", environmentName: null });
+    const scope = await service.resolveScope({ tenantId: org_a, projectSlug: "client-site", environmentName: null });
     expect(scope?.environments.map((e) => e.name)).toEqual(["prod"]);
     expect(await status(service.createProject(ada, { name: "Dup", slug: "client-site" }))).toBe(409);
     expect(await status(service.createProject(ada, { name: "Bad", environments: ["staging"] }))).toBe(400);
@@ -120,16 +194,16 @@ describe("projects and environments", () => {
   });
 
   it("extends the vocabulary only deliberately, and never drops a name in use", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
-    const scope = (await service.resolveScope({ tenantId: "org_a", projectSlug: "default", environmentName: null }))!;
-    const ada = await scopedCtx("ada", "org_a", scope.project.id, scope.environment.id);
+    const org_a = await bootstrap();
+    const scope = (await service.resolveScope({ tenantId: org_a, projectSlug: "default", environmentName: null }))!;
+    const ada = await scopedCtx("ada", org_a, scope.project.id, scope.environment.id);
     expect(await status(service.addEnvironment(ada, { name: "dev" }))).toBe(400);
     const dev = await service.addEnvironment(ada, { name: "dev", extendVocabulary: true });
     expect(dev.name).toBe("dev");
-    expect((await service.getTenant(await tenantCtx("ada", "org_a"))).environments).toEqual(["prod", "dev"]);
+    expect((await service.getTenant(await tenantCtx("ada", org_a))).environments).toEqual(["prod", "dev"]);
     expect(await status(service.addEnvironment(ada, { name: "dev" }))).toBe(409);
 
-    const tctx = await tenantCtx("ada", "org_a");
+    const tctx = await tenantCtx("ada", org_a);
     expect(
       await status(service.updateTenantEnvironments(tctx, { environments: ["prod"], projectDefaults: ["prod"] })),
     ).toBe(409);
@@ -140,67 +214,65 @@ describe("projects and environments", () => {
     expect(updated.projectDefaults).toEqual(["prod", "dev"]);
     const p2 = await service.createProject(tctx, { name: "Two" });
     expect(
-      (
-        await service.resolveScope({ tenantId: "org_a", projectSlug: p2.slug, environmentName: null })
-      )?.environments.map((e) => e.name),
+      (await service.resolveScope({ tenantId: org_a, projectSlug: p2.slug, environmentName: null }))?.environments.map(
+        (e) => e.name,
+      ),
     ).toEqual(["prod", "dev"]);
   });
 
   it("a project-scoped admin manages their project but not the tenant", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
-    const ada = await tenantCtx("ada", "org_a");
+    const org_a = await bootstrap();
+    const ada = await tenantCtx("ada", org_a);
     const p1 = await service.createProject(ada, { name: "One" });
     await service.createProject(ada, { name: "Two" });
     await service.createGrant(ada, { subject: "user:carl", roleId: ROLE_IDS.admin, scope: projectScope(p1.id) });
 
-    const carlTenant = await tenantCtx("carl", "org_a");
+    const carlTenant = await tenantCtx("carl", org_a);
     expect((await service.listProjects(carlTenant)).map((p) => p.slug)).toEqual(["one"]);
     expect(await status(service.createProject(carlTenant, { name: "Three" }))).toBe(403);
 
-    const s1 = (await service.resolveScope({ tenantId: "org_a", projectSlug: "one", environmentName: null }))!;
-    const carlInOne = await scopedCtx("carl", "org_a", s1.project.id, s1.environment.id);
+    const s1 = (await service.resolveScope({ tenantId: org_a, projectSlug: "one", environmentName: null }))!;
+    const carlInOne = await scopedCtx("carl", org_a, s1.project.id, s1.environment.id);
     expect((await service.updateProject(carlInOne, { name: "One renamed" })).name).toBe("One renamed");
     expect(await status(service.deleteProject(carlInOne))).toBe(403);
 
-    const s2 = (await service.resolveScope({ tenantId: "org_a", projectSlug: "two", environmentName: null }))!;
-    const carlInTwo = await scopedCtx("carl", "org_a", s2.project.id, s2.environment.id);
+    const s2 = (await service.resolveScope({ tenantId: org_a, projectSlug: "two", environmentName: null }))!;
+    const carlInTwo = await scopedCtx("carl", org_a, s2.project.id, s2.environment.id);
     expect(carlInTwo.grants).toEqual([]);
     expect(await status(service.listEnvironments(carlInTwo))).toBe(403);
   });
 
   it("deleting a project sweeps its scopes' grants", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
-    const ada = await tenantCtx("ada", "org_a");
+    const org_a = await bootstrap();
+    const ada = await tenantCtx("ada", org_a);
     const p1 = await service.createProject(ada, { name: "One" });
     await service.createGrant(ada, { subject: "user:carl", roleId: ROLE_IDS.viewer, scope: projectScope(p1.id) });
-    const s1 = (await service.resolveScope({ tenantId: "org_a", projectSlug: "one", environmentName: null }))!;
-    const adaInOne = await scopedCtx("ada", "org_a", s1.project.id, s1.environment.id);
+    const s1 = (await service.resolveScope({ tenantId: org_a, projectSlug: "one", environmentName: null }))!;
+    const adaInOne = await scopedCtx("ada", org_a, s1.project.id, s1.environment.id);
     await service.deleteProject(adaInOne);
-    expect(await service.resolveScope({ tenantId: "org_a", projectSlug: "one", environmentName: null })).toBeNull();
+    expect(await service.resolveScope({ tenantId: org_a, projectSlug: "one", environmentName: null })).toBeNull();
     expect((await service.listGrants(ada)).some((g) => g.subject === "user:carl")).toBe(false);
   });
 });
 
 describe("grants", () => {
   it("validates scope and subject against the tenant and refuses to orphan a tenant", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
-    await service.ensureTenant({ orgId: "org_b", name: "B", creatorUserId: "bea" });
-    const ada = await tenantCtx("ada", "org_a");
+    const org_a = await bootstrap();
+    const org_b = (await signIn("bea")).tenants[0]!.id;
+    const ada = await tenantCtx("ada", org_a);
     expect(
-      await status(
-        service.createGrant(ada, { subject: "user:x", roleId: ROLE_IDS.viewer, scope: tenantScope("org_b") }),
-      ),
+      await status(service.createGrant(ada, { subject: "user:x", roleId: ROLE_IDS.viewer, scope: tenantScope(org_b) })),
     ).toBe(403);
     expect(
       await status(
-        service.createGrant(ada, { subject: "org:org_b", roleId: ROLE_IDS.viewer, scope: tenantScope("org_a") }),
+        service.createGrant(ada, { subject: "org:org_b", roleId: ROLE_IDS.viewer, scope: tenantScope(org_a) }),
       ),
     ).toBe(403);
     expect(
-      await status(service.createGrant(ada, { subject: "user:x", roleId: "nope", scope: tenantScope("org_a") })),
+      await status(service.createGrant(ada, { subject: "user:x", roleId: "nope", scope: tenantScope(org_a) })),
     ).toBe(400);
     expect(
-      await status(service.createGrant(ada, { subject: "user:x", pattern: "tpx.nope.*", scope: tenantScope("org_a") })),
+      await status(service.createGrant(ada, { subject: "user:x", pattern: "tpx.nope.*", scope: tenantScope(org_a) })),
     ).toBe(400);
     expect(await status(service.createGrant(ada, { subject: "user:x", roleId: ROLE_IDS.viewer, scope: "*" }))).toBe(
       403,
@@ -211,17 +283,15 @@ describe("grants", () => {
     const second = await service.createGrant(ada, {
       subject: "user:zed",
       roleId: ROLE_IDS.owner,
-      scope: tenantScope("org_a"),
+      scope: tenantScope(org_a),
     });
     await service.deleteGrant(ada, owner.id); // ada steps down; zed remains
-    const zed = await tenantCtx("zed", "org_a");
+    const zed = await tenantCtx("zed", org_a);
     expect(await status(service.deleteGrant(zed, second.id))).toBe(409);
 
     // A stale context cannot widen: ada's ctx still claims manage_grants, but the fresh check denies.
     expect(
-      await status(
-        service.createGrant(ada, { subject: "user:x", roleId: ROLE_IDS.viewer, scope: tenantScope("org_a") }),
-      ),
+      await status(service.createGrant(ada, { subject: "user:x", roleId: ROLE_IDS.viewer, scope: tenantScope(org_a) })),
     ).toBe(403);
 
     const audit = await service.listAudit(zed, { limit: 50 });
@@ -232,14 +302,14 @@ describe("grants", () => {
   });
 
   it("serves closure data, ancestry and the epoch to tpx-web", async () => {
-    await service.ensureTenant({ orgId: "org_a", name: "A", creatorUserId: "ada" });
+    const org_a = await bootstrap();
     const access = await service.getSubjectAccess({ userId: "ada" });
     expect(access.closure).toContain("user:ada");
     expect(access.grants.some((g) => g.roleId === ROLE_IDS.owner)).toBe(true);
-    const scope = (await service.resolveScope({ tenantId: "org_a", projectSlug: "default", environmentName: null }))!;
+    const scope = (await service.resolveScope({ tenantId: org_a, projectSlug: "default", environmentName: null }))!;
     expect(await service.resolveAncestors(environmentScope(scope.environment.id))).toEqual([
       projectScope(scope.project.id),
-      tenantScope("org_a"),
+      tenantScope(org_a),
       "*",
     ]);
     expect(await service.resolveAncestors(environmentScope("env_gone"))).toEqual(["*"]);
@@ -263,7 +333,7 @@ describe("grants", () => {
 describe("http surface (behind the tpx-web forwarder)", () => {
   it("echoes the delivered context on /whoami and refuses requests without one", async () => {
     const ctx: Ctx = {
-      tenantId: "org_a",
+      tenantId: "tnt_a",
       projectId: "prj",
       environmentId: "env",
       environmentName: "prod",

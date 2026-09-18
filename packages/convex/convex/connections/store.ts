@@ -3,8 +3,8 @@
  * out; cascades are transactional because a mutation is one transaction.
  */
 import { v } from "convex/values";
-import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "../_generated/server";
+import type { Doc } from "../_generated/dataModel";
 
 const values = v.record(v.string(), v.string());
 const lastTest = v.union(v.null(), v.object({ at: v.number(), ok: v.boolean(), message: v.string() }));
@@ -77,7 +77,7 @@ const auditRow = v.object({
   detail: v.optional(v.any()),
 });
 
-const connectionOut = (d: Doc<"connections">) => ({
+const connectionOut = (d: Doc<"connections_connections">) => ({
   id: d.connectionId,
   tenantId: d.tenantId,
   provider: d.provider,
@@ -89,13 +89,13 @@ const connectionOut = (d: Doc<"connections">) => ({
   updatedAt: d.updatedAt,
   lastTest: d.lastTest,
 });
-const environmentDefaultOut = (d: Doc<"environmentDefaults">) => ({
+const environmentDefaultOut = (d: Doc<"connections_environmentDefaults">) => ({
   connectionId: d.connectionId,
   tenantId: d.tenantId,
   environmentName: d.environmentName,
   config: d.config,
 });
-const secretOut = (d: Doc<"secrets">) => ({
+const secretOut = (d: Doc<"connections_secrets">) => ({
   id: d.secretId,
   tenantId: d.tenantId,
   ownerKind: d.ownerKind,
@@ -111,7 +111,7 @@ const secretOut = (d: Doc<"secrets">) => ({
   createdAt: d.createdAt,
   updatedAt: d.updatedAt,
 });
-const attachmentOut = (d: Doc<"attachments">) => ({
+const attachmentOut = (d: Doc<"connections_attachments">) => ({
   id: d.attachmentId,
   tenantId: d.tenantId,
   projectId: d.projectId,
@@ -123,7 +123,7 @@ const attachmentOut = (d: Doc<"attachments">) => ({
   createdAt: d.createdAt,
   updatedAt: d.updatedAt,
 });
-const bindingOut = (d: Doc<"bindings">) => ({
+const bindingOut = (d: Doc<"connections_bindings">) => ({
   attachmentId: d.attachmentId,
   environmentId: d.environmentId,
   tenantId: d.tenantId,
@@ -131,7 +131,7 @@ const bindingOut = (d: Doc<"bindings">) => ({
   config: d.config,
   updatedAt: d.updatedAt,
 });
-const auditOut = (d: Doc<"audit">) => ({
+const auditOut = (d: Doc<"connections_audit">) => ({
   id: d.auditId,
   tenantId: d.tenantId,
   projectId: d.projectId,
@@ -146,14 +146,14 @@ const auditOut = (d: Doc<"audit">) => ({
 
 async function connectionDoc(ctx: QueryCtx | MutationCtx, tenantId: string, connectionId: string) {
   const row = await ctx.db
-    .query("connections")
+    .query("connections_connections")
     .withIndex("by_connectionId", (q) => q.eq("connectionId", connectionId))
     .unique();
   return row && row.tenantId === tenantId ? row : null;
 }
 async function attachmentDoc(ctx: QueryCtx | MutationCtx, tenantId: string, attachmentId: string) {
   const row = await ctx.db
-    .query("attachments")
+    .query("connections_attachments")
     .withIndex("by_attachmentId", (q) => q.eq("attachmentId", attachmentId))
     .unique();
   return row && row.tenantId === tenantId ? row : null;
@@ -164,7 +164,7 @@ async function secretsOfOwner(
   owner: { ownerKind: string; ownerId: string; environmentKey: string },
 ) {
   return ctx.db
-    .query("secrets")
+    .query("connections_secrets")
     .withIndex("by_owner", (q) =>
       q
         .eq("tenantId", tenantId)
@@ -177,13 +177,13 @@ async function secretsOfOwner(
 /** Every secret of an owner id under a kind, across environment keys (cascades). */
 async function secretsOfOwnerId(ctx: MutationCtx, tenantId: string, ownerKind: string, ownerId: string) {
   return ctx.db
-    .query("secrets")
+    .query("connections_secrets")
     .withIndex("by_owner", (q) => q.eq("tenantId", tenantId).eq("ownerKind", ownerKind).eq("ownerId", ownerId))
     .collect();
 }
-async function deleteAttachmentCascade(ctx: MutationCtx, att: Doc<"attachments">) {
+async function deleteAttachmentCascade(ctx: MutationCtx, att: Doc<"connections_attachments">) {
   for (const b of await ctx.db
-    .query("bindings")
+    .query("connections_bindings")
     .withIndex("by_attachment", (q) => q.eq("attachmentId", att.attachmentId))
     .collect()) {
     await ctx.db.delete(b._id);
@@ -200,7 +200,7 @@ export const listConnections = internalQuery({
   handler: async (ctx, { tenantId }) =>
     (
       await ctx.db
-        .query("connections")
+        .query("connections_connections")
         .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
         .order("asc")
         .collect()
@@ -219,11 +219,11 @@ export const insertConnection = internalMutation({
   args: { row: connectionRow },
   handler: async (ctx, { row }) => {
     const existing = await ctx.db
-      .query("connections")
+      .query("connections_connections")
       .withIndex("by_connectionId", (q) => q.eq("connectionId", row.id))
       .unique();
     if (existing) throw new Error(`connection ${row.id} already exists`);
-    await ctx.db.insert("connections", {
+    await ctx.db.insert("connections_connections", {
       connectionId: row.id,
       tenantId: row.tenantId,
       provider: row.provider,
@@ -269,7 +269,7 @@ export const deleteConnection = internalMutation({
     const row = await connectionDoc(ctx, tenantId, connectionId);
     if (!row) return;
     for (const d of await ctx.db
-      .query("environmentDefaults")
+      .query("connections_environmentDefaults")
       .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
       .collect()) {
       await ctx.db.delete(d._id);
@@ -278,7 +278,7 @@ export const deleteConnection = internalMutation({
       for (const s of await secretsOfOwnerId(ctx, tenantId, kind, connectionId)) await ctx.db.delete(s._id);
     }
     for (const att of await ctx.db
-      .query("attachments")
+      .query("connections_attachments")
       .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
       .collect()) {
       if (att.tenantId === tenantId) await deleteAttachmentCascade(ctx, att);
@@ -293,7 +293,7 @@ export const listEnvironmentDefaults = internalQuery({
   handler: async (ctx, { tenantId, connectionId }) =>
     (
       await ctx.db
-        .query("environmentDefaults")
+        .query("connections_environmentDefaults")
         .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
         .collect()
     )
@@ -305,13 +305,13 @@ export const upsertEnvironmentDefault = internalMutation({
   args: { row: environmentDefaultRow },
   handler: async (ctx, { row }) => {
     const existing = await ctx.db
-      .query("environmentDefaults")
+      .query("connections_environmentDefaults")
       .withIndex("by_connection_env", (q) =>
         q.eq("connectionId", row.connectionId).eq("environmentName", row.environmentName),
       )
       .unique();
     if (existing) await ctx.db.replace(existing._id, row);
-    else await ctx.db.insert("environmentDefaults", row);
+    else await ctx.db.insert("connections_environmentDefaults", row);
   },
 });
 
@@ -319,7 +319,7 @@ export const upsertEnvironmentDefault = internalMutation({
 export const listSecrets = internalQuery({
   args: { tenantId: v.string(), owners: v.array(ownerRef) },
   handler: async (ctx, { tenantId, owners }) => {
-    const out: Doc<"secrets">[] = [];
+    const out: Doc<"connections_secrets">[] = [];
     for (const owner of owners) out.push(...(await secretsOfOwner(ctx, tenantId, owner)));
     return out.map(secretOut);
   },
@@ -329,7 +329,7 @@ export const upsertSecret = internalMutation({
   args: { row: secretRow },
   handler: async (ctx, { row }) => {
     const existing = await ctx.db
-      .query("secrets")
+      .query("connections_secrets")
       .withIndex("by_owner_key", (q) =>
         q
           .eq("tenantId", row.tenantId)
@@ -356,7 +356,7 @@ export const upsertSecret = internalMutation({
       updatedAt: row.updatedAt,
     };
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("secrets", doc);
+    else await ctx.db.insert("connections_secrets", doc);
   },
 });
 
@@ -364,7 +364,7 @@ export const deleteSecret = internalMutation({
   args: { tenantId: v.string(), owner: ownerRef, key: v.string() },
   handler: async (ctx, { tenantId, owner, key }) => {
     const existing = await ctx.db
-      .query("secrets")
+      .query("connections_secrets")
       .withIndex("by_owner_key", (q) =>
         q
           .eq("tenantId", tenantId)
@@ -391,7 +391,7 @@ export const listAttachments = internalQuery({
   handler: async (ctx, { tenantId, projectId }) =>
     (
       await ctx.db
-        .query("attachments")
+        .query("connections_attachments")
         .withIndex("by_tenant_project", (q) => q.eq("tenantId", tenantId).eq("projectId", projectId))
         .order("asc")
         .collect()
@@ -411,7 +411,7 @@ export const listAttachmentsForConnection = internalQuery({
   handler: async (ctx, { tenantId, connectionId }) =>
     (
       await ctx.db
-        .query("attachments")
+        .query("connections_attachments")
         .withIndex("by_connection", (q) => q.eq("connectionId", connectionId))
         .collect()
     )
@@ -423,13 +423,13 @@ export const insertAttachment = internalMutation({
   args: { row: attachmentRow },
   handler: async (ctx, { row }) => {
     const clash = await ctx.db
-      .query("attachments")
+      .query("connections_attachments")
       .withIndex("by_project_capability_name", (q) =>
         q.eq("projectId", row.projectId).eq("capability", row.capability).eq("name", row.name),
       )
       .unique();
     if (clash) return false;
-    await ctx.db.insert("attachments", {
+    await ctx.db.insert("connections_attachments", {
       attachmentId: row.id,
       tenantId: row.tenantId,
       projectId: row.projectId,
@@ -472,7 +472,7 @@ export const setDefaultAttachment = internalMutation({
   args: { tenantId: v.string(), projectId: v.string(), capability: v.string(), attachmentId: v.string() },
   handler: async (ctx, { tenantId, projectId, capability, attachmentId }) => {
     const rows = await ctx.db
-      .query("attachments")
+      .query("connections_attachments")
       .withIndex("by_tenant_project", (q) => q.eq("tenantId", tenantId).eq("projectId", projectId))
       .collect();
     for (const row of rows) {
@@ -496,7 +496,7 @@ export const getBinding = internalQuery({
   args: { tenantId: v.string(), attachmentId: v.string(), environmentId: v.string() },
   handler: async (ctx, { tenantId, attachmentId, environmentId }) => {
     const row = await ctx.db
-      .query("bindings")
+      .query("connections_bindings")
       .withIndex("by_attachment_env", (q) => q.eq("attachmentId", attachmentId).eq("environmentId", environmentId))
       .unique();
     return row && row.tenantId === tenantId ? bindingOut(row) : null;
@@ -508,7 +508,7 @@ export const listBindings = internalQuery({
   handler: async (ctx, { tenantId, attachmentId }) =>
     (
       await ctx.db
-        .query("bindings")
+        .query("connections_bindings")
         .withIndex("by_attachment", (q) => q.eq("attachmentId", attachmentId))
         .collect()
     )
@@ -520,13 +520,13 @@ export const upsertBinding = internalMutation({
   args: { row: bindingRow },
   handler: async (ctx, { row }) => {
     const existing = await ctx.db
-      .query("bindings")
+      .query("connections_bindings")
       .withIndex("by_attachment_env", (q) =>
         q.eq("attachmentId", row.attachmentId).eq("environmentId", row.environmentId),
       )
       .unique();
     if (existing) await ctx.db.replace(existing._id, row);
-    else await ctx.db.insert("bindings", row);
+    else await ctx.db.insert("connections_bindings", row);
   },
 });
 
@@ -534,7 +534,7 @@ export const deleteBinding = internalMutation({
   args: { tenantId: v.string(), attachmentId: v.string(), environmentId: v.string() },
   handler: async (ctx, { tenantId, attachmentId, environmentId }) => {
     const row = await ctx.db
-      .query("bindings")
+      .query("connections_bindings")
       .withIndex("by_attachment_env", (q) => q.eq("attachmentId", attachmentId).eq("environmentId", environmentId))
       .unique();
     if (row && row.tenantId === tenantId) await ctx.db.delete(row._id);
@@ -545,7 +545,7 @@ export const deleteBinding = internalMutation({
 export const recordAudit = internalMutation({
   args: { row: auditRow },
   handler: async (ctx, { row }) => {
-    await ctx.db.insert("audit", {
+    await ctx.db.insert("connections_audit", {
       auditId: row.id,
       tenantId: row.tenantId,
       projectId: row.projectId,
@@ -567,12 +567,12 @@ export const listAudit = internalQuery({
     const rows =
       projectId === undefined
         ? await ctx.db
-            .query("audit")
+            .query("connections_audit")
             .withIndex("by_tenant_at", (q) => q.eq("tenantId", tenantId))
             .order("desc")
             .take(take)
         : await ctx.db
-            .query("audit")
+            .query("connections_audit")
             .withIndex("by_tenant_project_at", (q) => q.eq("tenantId", tenantId).eq("projectId", projectId))
             .order("desc")
             .take(take);

@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * The console in fixture mode: Ada Fixture is org:admin of "Ada's Org", which
- * tpx-auth bootstraps with a Default project and the default vocabulary
- * (just `prod`; the tests extend it with `staging`). State is in memory and
- * shared across tests, so they run serially in order.
+ * The console in fixture mode: Ada Fixture signs in and tpx-auth bootstraps
+ * "Ada's Org" for her (owner) with a Default project and the default
+ * vocabulary (just `prod`; the tests extend it with `staging`). State is in
+ * memory and shared across tests, so they run serially in order.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -131,6 +131,45 @@ test("attach, override per environment, and promote with a diffed confirmation",
   await shot(page, "10-audit");
 });
 
+test("members are the console's own: invite by email, pending until first sign-in", async ({ page }) => {
+  await page.goto("/org/members");
+  await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
+  await expect(page.getByTestId("member-user_fixture")).toContainText("Ada Fixture");
+  await expect(page.getByTestId("member-user_fixture")).toContainText("Owner");
+  await page.getByLabel("Email").fill(`colleague-${run}@example.test`);
+  await page.getByLabel("Role").selectOption("tpx-admin");
+  await page.getByRole("button", { name: "Invite" }).click();
+  await expect(page.getByTestId("members-notice")).toContainText("claimed on their first sign-in");
+  await expect(page.getByTestId(`invite-colleague-${run}@example.test`)).toContainText("Admin");
+  await shot(page, "16-members");
+  await page.getByTestId(`invite-colleague-${run}@example.test`).getByRole("button", { name: "Revoke" }).click();
+  await expect(page.getByTestId("members-notice")).toContainText("revoked");
+});
+
+test("a second organization: created from the switcher, switched to, switched back", async ({ page }) => {
+  await page.goto("/default/prod");
+  await expect(page.getByTestId("tenant-switcher")).toContainText("Ada's Org");
+  await page.getByTestId("tenant-switcher").locator("summary").click();
+  await page.getByRole("link", { name: "New organization" }).click();
+  await expect(page).toHaveURL(/\/org\/new$/);
+  await page.getByLabel("Name", { exact: true }).fill(`Acme ${run}`);
+  await page.getByRole("button", { name: "Create organization" }).click();
+  await expect(page).toHaveURL(/\/default\/prod$/);
+  await expect(page.getByTestId("tenant-switcher")).toContainText(`Acme ${run}`);
+  await expect(page.getByRole("navigation", { name: "Primary" })).toContainText("Connections");
+  await shot(page, "17-second-tenant");
+
+  await page.goto("/org/settings");
+  await page.getByLabel("Organization name").fill(`Acme ${run} Ltd`);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("tenant-switcher")).toContainText(`Acme ${run} Ltd`);
+
+  await page.getByTestId("tenant-switcher").locator("summary").click();
+  await page.getByTestId("tenant-switcher").getByRole("button", { name: "Ada's Org" }).click();
+  await expect(page).toHaveURL(/\/default\/prod$/);
+  await expect(page.getByTestId("tenant-switcher")).toContainText("Ada's Org");
+});
+
 test("workspace pages and the dark theme", async ({ page }) => {
   await page.goto("/org/projects");
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
@@ -171,11 +210,9 @@ test("the API forwarder carries the resolved scope to the service", async ({ pag
     headers: { "x-tpx-project": "default", "x-tpx-environment": "staging" },
   });
   expect(whoami.status()).toBe(200);
-  expect(await whoami.json()).toMatchObject({
-    userId: "user_fixture",
-    tenantId: "org_fixture",
-    environmentName: "staging",
-  });
+  const who = (await whoami.json()) as { userId: string; tenantId: string; environmentName: string };
+  expect(who).toMatchObject({ userId: "user_fixture", environmentName: "staging" });
+  expect(who.tenantId).toMatch(/^tnt_/);
 
   const noScope = await page.request.get("/api/connections/providers");
   expect(noScope.status()).toBe(400);

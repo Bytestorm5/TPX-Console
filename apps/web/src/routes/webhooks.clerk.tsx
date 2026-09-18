@@ -3,8 +3,8 @@ import type { Route } from "./+types/webhooks.clerk";
 import { cloudflareContext } from "../shell/context.ts";
 
 /**
- * Clerk → console. Membership removals sweep the user's tenant grants so a
- * removed member loses access even before their session lapses.
+ * Clerk → console. Clerk only authenticates, so the one event that matters is
+ * a deleted user: their memberships, grants and profile go with them.
  */
 export async function action({ request, context }: Route.ActionArgs) {
   const { env } = context.get(cloudflareContext);
@@ -16,14 +16,9 @@ export async function action({ request, context }: Route.ActionArgs) {
     console.warn("clerk webhook rejected", error);
     return new Response("invalid signature", { status: 400 });
   }
-  switch (event.type) {
-    case "organizationMembership.deleted": {
-      const data = event.data as { organization: { id: string }; public_user_data: { user_id: string } };
-      await env.AUTH.removeMember({ orgId: data.organization.id, userId: data.public_user_data.user_id });
-      break;
-    }
-    default:
-      break;
+  if (event.type === "user.deleted") {
+    const data = event.data as { id?: string; deleted?: boolean };
+    if (data.id) await env.AUTH.forgetUser(data.id);
   }
   return Response.json({ ok: true });
 }

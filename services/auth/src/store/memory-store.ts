@@ -1,7 +1,7 @@
 /** The in-memory AuthStore: Alfiz's reference driver plus maps for tenancy. Tests only. */
 import { memoryDriver } from "@alfiz/application";
-import type { AuditEntry, Environment, Project, Tenant } from "@tpx/contracts/auth";
-import type { AuthStore, TenancyStore } from "./types.ts";
+import type { AuditEntry, Environment, Invite, Project, Tenant, UserProfile } from "@tpx/contracts/auth";
+import type { AuthStore, MembershipRow, TenancyStore } from "./types.ts";
 
 const clone = <T>(v: T): T => structuredClone(v);
 
@@ -11,6 +11,9 @@ export function memoryStore(): AuthStore {
   const projects = new Map<string, Project>();
   const environments = new Map<string, Environment>();
   const audit: Array<AuditEntry & { tenantId: string }> = [];
+  const users = new Map<string, UserProfile>();
+  const memberships: MembershipRow[] = [];
+  const invites = new Map<string, Invite>();
 
   const tenancy: TenancyStore = {
     async getTenant(tenantId) {
@@ -21,6 +24,69 @@ export function memoryStore(): AuthStore {
       if (tenants.has(tenant.id)) return false;
       tenants.set(tenant.id, clone(tenant));
       return true;
+    },
+    async updateTenantName(tenantId, name) {
+      const t = tenants.get(tenantId);
+      if (!t) throw new Error("tenant not found");
+      tenants.set(tenantId, { ...t, name });
+    },
+    async getUser(userId) {
+      const u = users.get(userId);
+      return u ? clone(u) : null;
+    },
+    async getUserByEmail(email) {
+      const u = [...users.values()].find((x) => x.email === email);
+      return u ? clone(u) : null;
+    },
+    async upsertUser(profile) {
+      users.set(profile.userId, clone(profile));
+    },
+    async deleteUser(userId) {
+      users.delete(userId);
+    },
+    async listMemberships(userId) {
+      return memberships
+        .filter((m) => m.userId === userId)
+        .sort((a, b) => a.joinedAt - b.joinedAt)
+        .map(clone);
+    },
+    async listMembers(tenantId) {
+      return memberships
+        .filter((m) => m.tenantId === tenantId)
+        .sort((a, b) => a.joinedAt - b.joinedAt)
+        .map(clone);
+    },
+    async insertMembership(row) {
+      if (memberships.some((m) => m.tenantId === row.tenantId && m.userId === row.userId)) return false;
+      memberships.push(clone(row));
+      return true;
+    },
+    async deleteMembership(tenantId, userId) {
+      const index = memberships.findIndex((m) => m.tenantId === tenantId && m.userId === userId);
+      if (index >= 0) memberships.splice(index, 1);
+    },
+    async insertInvite(invite) {
+      if ([...invites.values()].some((i) => i.tenantId === invite.tenantId && i.email === invite.email)) return false;
+      invites.set(invite.id, clone(invite));
+      return true;
+    },
+    async listInvites(tenantId) {
+      return [...invites.values()]
+        .filter((i) => i.tenantId === tenantId)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map(clone);
+    },
+    async listInvitesForEmail(email) {
+      return [...invites.values()]
+        .filter((i) => i.email === email)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map(clone);
+    },
+    async deleteInvite(inviteId) {
+      const i = invites.get(inviteId);
+      if (!i) return null;
+      invites.delete(inviteId);
+      return clone(i);
     },
     async updateTenantVocabulary(tenantId, envs, defaults) {
       const t = tenants.get(tenantId);

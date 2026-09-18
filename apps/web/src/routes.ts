@@ -4,7 +4,8 @@ import { productRoutes } from "./registry.routes.ts";
 export default [
   route("sign-in/*", "routes/sign-in.tsx"),
   route("sign-up/*", "routes/sign-up.tsx"),
-  route("onboarding", "routes/onboarding.tsx"),
+  route("org/switch", "routes/org/switch.tsx"),
+  route("org/new", "routes/org/new.tsx"),
   route("webhooks/clerk", "routes/webhooks.clerk.tsx"),
   route("api/:product/*", "routes/api.tsx"),
   route("healthz", "routes/healthz.tsx"),
@@ -16,6 +17,7 @@ export default [
     route("org/members", "routes/org/members.tsx"),
     route("org/access", "routes/org/access.tsx"),
     route("org/audit", "routes/org/audit.tsx"),
+    route("org/settings", "routes/org/settings.tsx"),
   ]),
   route(":project", "routes/project.tsx"),
   route(":project/:environment", "routes/scope.tsx", [index("routes/overview.tsx"), ...productRoutes]),

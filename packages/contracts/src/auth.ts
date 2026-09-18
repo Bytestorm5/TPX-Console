@@ -1,14 +1,16 @@
 /**
  * tpx-auth — tenants, projects, environments, membership, grants, audit.
  * The service is the Alfiz Application (org root) for the console; tpx-web
- * attaches an Alfiz client to it through the provider seam below.
+ * attaches an Alfiz client to it through the provider seam below. The
+ * identity provider (Clerk) only authenticates: tenants, membership and
+ * invitations are the console's own, modelled on Alfiz's directory.
  */
 import { z } from "zod";
 import { EnvironmentNameSchema, IdSchema, SlugSchema, type Ctx, type TenantCtx } from "./scope.ts";
 import type { ProductCapabilities } from "./product.ts";
 
 export const TenantSchema = z.object({
-  /** The Clerk organization id — tenants ARE organizations. */
+  /** Assigned by tpx-auth (`tnt_…`). Tenants and their membership live in Alfiz, never in the identity provider. */
   id: IdSchema,
   name: z.string().min(1).max(120),
   /** The environment vocabulary. Connection defaults are keyed by these names. */
@@ -64,6 +66,68 @@ export const UpdateTenantEnvironmentsInputSchema = z
     path: ["projectDefaults"],
   });
 export type UpdateTenantEnvironmentsInput = z.infer<typeof UpdateTenantEnvironmentsInputSchema>;
+
+export const CreateTenantInputSchema = z.object({ name: z.string().trim().min(1).max(120) });
+export type CreateTenantInput = z.infer<typeof CreateTenantInputSchema>;
+
+export const UpdateTenantInputSchema = z.object({ name: z.string().trim().min(1).max(120) });
+export type UpdateTenantInput = z.infer<typeof UpdateTenantInputSchema>;
+
+/** What the console knows about a user: identity comes from Clerk, everything else is ours. */
+export const UserProfileSchema = z.object({
+  userId: IdSchema,
+  email: z.string().max(254).nullable(),
+  displayName: z.string().max(200).nullable(),
+  imageUrl: z.string().max(2048).nullable(),
+  updatedAt: z.number().int(),
+});
+export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+export const ProfileInputSchema = z.object({
+  email: z.string().trim().toLowerCase().max(254).nullable(),
+  displayName: z.string().trim().max(200).nullable(),
+  imageUrl: z.string().max(2048).nullable(),
+});
+export type ProfileInput = z.infer<typeof ProfileInputSchema>;
+
+export const TenantSummarySchema = z.object({ id: IdSchema, name: z.string(), joinedAt: z.number().int() });
+export type TenantSummary = z.infer<typeof TenantSummarySchema>;
+
+/** The result of ingress: who this is and which tenants they belong to (never empty after bootstrap). */
+export interface UserSession {
+  user: UserProfile | null;
+  tenants: TenantSummary[];
+}
+
+export const MemberSchema = z.object({
+  userId: IdSchema,
+  email: z.string().nullable(),
+  displayName: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  joinedAt: z.number().int(),
+  /** Role ids granted directly to the user at the tenant scope. */
+  roles: z.array(z.string()),
+});
+export type Member = z.infer<typeof MemberSchema>;
+
+export const InviteMemberInputSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  roleId: z.string().min(1).max(64),
+});
+export type InviteMemberInput = z.infer<typeof InviteMemberInputSchema>;
+
+export const InviteSchema = z.object({
+  id: IdSchema,
+  tenantId: IdSchema,
+  email: z.string(),
+  roleId: z.string(),
+  invitedBy: IdSchema,
+  createdAt: z.number().int(),
+});
+export type Invite = z.infer<typeof InviteSchema>;
+
+/** Inviting a known user adds them at once; an unknown address waits for its first sign-in. */
+export type InviteResult = { kind: "added"; member: Member } | { kind: "invited"; invite: Invite };
 
 export const AddEnvironmentInputSchema = z.object({
   name: EnvironmentNameSchema,
@@ -129,18 +193,10 @@ export interface ResolvedScope {
   environments: Environment[];
 }
 
-/** The identity tpx-web resolved from the Clerk session. */
+/** The identity tpx-web resolved from the Clerk session, plus the profile when tpx-web fetched it. */
 export interface EnsureUserInput {
   userId: string;
-  orgId: string;
-  /** Clerk's organization role for the active membership, e.g. `org:admin`. */
-  orgRole: string | null;
-}
-
-export interface EnsureTenantInput {
-  orgId: string;
-  name: string;
-  creatorUserId: string;
+  profile?: ProfileInput;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,18 +248,19 @@ export interface AuthProviderSeam {
 export interface AuthServiceContract extends AuthProviderSeam {
   capabilities(): Promise<ProductCapabilities>;
 
-  /** Records the user's membership of the org (idempotent). Called at ingress. */
-  ensureUser(input: EnsureUserInput): Promise<void>;
   /**
-   * Creates the tenant row for a Clerk organization if it doesn't exist,
-   * grants the creator the owner role at tenant scope and every org member
-   * the member role. Idempotent: a second call returns the existing tenant.
+   * Ingress. Records the user, stores the profile when given, claims any
+   * invitation addressed to their email, and — for a user who belongs to no
+   * tenant — creates "<First name>'s Org" with them as owner. Returns the
+   * tenants they belong to.
    */
-  ensureTenant(input: EnsureTenantInput): Promise<Tenant>;
-  /** The tenant row for an organization, or null before bootstrap. Ids only; ingress-only. */
-  findTenant(orgId: string): Promise<Tenant | null>;
-  /** Removes a user's tenant-scoped grants and org link (Clerk webhook path). */
-  removeMember(input: { orgId: string; userId: string }): Promise<void>;
+  ensureUser(input: EnsureUserInput): Promise<UserSession>;
+  /** A signed-in user creates another tenant and becomes its owner. */
+  createTenant(input: { name: string; creatorUserId: string }): Promise<Tenant>;
+  /** The tenant row, or null. Ids only; ingress-only (membership is checked by the caller against `ensureUser`). */
+  findTenant(tenantId: string): Promise<Tenant | null>;
+  /** The identity provider deleted the user: memberships, grants and profile go (webhook path). */
+  forgetUser(userId: string): Promise<void>;
   /** Ids only, no grants involved: ingress resolves the URL, then computes grants at the environment. */
   resolveScope(input: {
     tenantId: string;
@@ -212,7 +269,15 @@ export interface AuthServiceContract extends AuthProviderSeam {
   }): Promise<ResolvedScope | null>;
 
   getTenant(ctx: TenantCtx): Promise<Tenant>;
+  updateTenant(ctx: TenantCtx, input: UpdateTenantInput): Promise<Tenant>;
   updateTenantEnvironments(ctx: TenantCtx, input: UpdateTenantEnvironmentsInput): Promise<Tenant>;
+
+  listMembers(ctx: TenantCtx): Promise<Member[]>;
+  inviteMember(ctx: TenantCtx, input: InviteMemberInput): Promise<InviteResult>;
+  listInvites(ctx: TenantCtx): Promise<Invite[]>;
+  revokeInvite(ctx: TenantCtx, inviteId: string): Promise<void>;
+  /** Removes the membership and every grant the user holds inside the tenant. */
+  removeMember(ctx: TenantCtx, userId: string): Promise<void>;
   /** The projects the caller may read — all of them with a tenant-level grant, otherwise per-project. */
   listProjects(ctx: TenantCtx): Promise<Project[]>;
   createProject(ctx: TenantCtx, input: CreateProjectInput): Promise<Project>;

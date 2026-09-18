@@ -4,5 +4,5 @@
     "types": ["@cloudflare/workers-types/experimental", "@cloudflare/vitest-plugin/types"],
     "lib": ["ES2022"]
   },
-  "include": ["src", "test", "convex", "worker-configuration.d.ts", "vitest.config.ts"]
+  "include": ["src", "test", "worker-configuration.d.ts", "vitest.config.ts"]
 }

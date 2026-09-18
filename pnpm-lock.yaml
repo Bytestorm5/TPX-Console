@@ -122,6 +122,19 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.6.1)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0))
 
+  packages/convex:
+    dependencies:
+      convex:
+        specifier: 1.46.0
+        version: 1.46.0(@clerk/react@6.16.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 8.3.0
+        version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0)
+
   packages/convex-client:
     dependencies:
       convex:
@@ -211,6 +224,9 @@ importers:
       '@tpx/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@tpx/convex':
+        specifier: workspace:*
+        version: link:../../packages/convex
       '@tpx/convex-client':
         specifier: workspace:*
         version: link:../../packages/convex-client
@@ -236,9 +252,6 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
-      vite:
-        specifier: 8.3.0
-        version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.6.1)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0))
@@ -251,6 +264,9 @@ importers:
       '@tpx/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@tpx/convex':
+        specifier: workspace:*
+        version: link:../../packages/convex
       '@tpx/convex-client':
         specifier: workspace:*
         version: link:../../packages/convex-client
@@ -276,9 +292,6 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
-      vite:
-        specifier: 8.3.0
-        version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.6.1)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0))

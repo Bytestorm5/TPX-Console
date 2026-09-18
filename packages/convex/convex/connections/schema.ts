@@ -1,16 +1,16 @@
 /**
- * tpx-connections' Convex schema. Every table carries tenantId; project- and
- * environment-shaped rows carry those ids too. The `secrets` table holds
- * ciphertext only: the Worker encrypts before writing and decrypts after
- * reading, and Convex never sees a plaintext credential.
+ * tpx-connections' tables (prefix `connections_`). Every table carries
+ * tenantId; project- and environment-shaped rows carry those ids too. The
+ * secrets table holds ciphertext only: the Worker encrypts before writing and
+ * decrypts after reading, and Convex never sees a plaintext credential.
  */
-import { defineSchema, defineTable } from "convex/server";
+import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
 const values = v.record(v.string(), v.string());
 
-export default defineSchema({
-  connections: defineTable({
+export const connectionsTables = {
+  connections_connections: defineTable({
     connectionId: v.string(),
     tenantId: v.string(),
     provider: v.string(),
@@ -25,7 +25,7 @@ export default defineSchema({
     .index("by_connectionId", ["connectionId"])
     .index("by_tenant", ["tenantId", "createdAt"]),
 
-  environmentDefaults: defineTable({
+  connections_environmentDefaults: defineTable({
     connectionId: v.string(),
     tenantId: v.string(),
     environmentName: v.string(),
@@ -34,7 +34,7 @@ export default defineSchema({
     .index("by_connection_env", ["connectionId", "environmentName"])
     .index("by_connection", ["connectionId"]),
 
-  secrets: defineTable({
+  connections_secrets: defineTable({
     secretId: v.string(),
     tenantId: v.string(),
     ownerKind: v.string(),
@@ -54,7 +54,7 @@ export default defineSchema({
     .index("by_owner", ["tenantId", "ownerKind", "ownerId", "environmentKey"])
     .index("by_owner_key", ["tenantId", "ownerKind", "ownerId", "environmentKey", "key"]),
 
-  attachments: defineTable({
+  connections_attachments: defineTable({
     attachmentId: v.string(),
     tenantId: v.string(),
     projectId: v.string(),
@@ -71,7 +71,7 @@ export default defineSchema({
     .index("by_connection", ["connectionId"])
     .index("by_project_capability_name", ["projectId", "capability", "name"]),
 
-  bindings: defineTable({
+  connections_bindings: defineTable({
     attachmentId: v.string(),
     environmentId: v.string(),
     tenantId: v.string(),
@@ -82,7 +82,7 @@ export default defineSchema({
     .index("by_attachment_env", ["attachmentId", "environmentId"])
     .index("by_attachment", ["attachmentId"]),
 
-  audit: defineTable({
+  connections_audit: defineTable({
     auditId: v.string(),
     tenantId: v.string(),
     projectId: v.union(v.string(), v.null()),
@@ -96,4 +96,4 @@ export default defineSchema({
   })
     .index("by_tenant_at", ["tenantId", "at"])
     .index("by_tenant_project_at", ["tenantId", "projectId", "at"]),
-});
+};

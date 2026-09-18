@@ -4,7 +4,7 @@
  * reads a resolved, authorized session instead of re-deriving it.
  */
 import { createContext } from "react-router";
-import type { Environment, Project, Tenant } from "@tpx/contracts/auth";
+import type { Environment, Project, Tenant, TenantSummary } from "@tpx/contracts/auth";
 import type { Ctx, TenantCtx } from "@tpx/contracts/scope";
 import type { SessionIdentity } from "@tpx/identity";
 import type { WebEnv } from "./env.ts";
@@ -12,12 +12,13 @@ import type { WebEnv } from "./env.ts";
 export const cloudflareContext = createContext<{ env: WebEnv; ctx: ExecutionContext }>();
 
 export type SignedInIdentity = SessionIdentity & { userId: string };
-export type TenantIdentity = SignedInIdentity & { orgId: string };
 
 export const identityContext = createContext<SessionIdentity | null>(null);
 
 export interface TenantSession {
-  identity: TenantIdentity;
+  identity: SignedInIdentity;
+  /** Every tenant the user belongs to (never empty: ingress bootstraps one). */
+  tenants: TenantSummary[];
   tenant: Tenant;
   tenantCtx: TenantCtx;
 }

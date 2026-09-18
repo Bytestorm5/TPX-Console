@@ -9,13 +9,12 @@
     "typecheck": "pnpm typegen && tsc -p tsconfig.json",
     "test": "vitest run",
     "dev": "wrangler dev",
-    "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy",
     "deploy": "wrangler deploy",
     "deploy:dry-run": "wrangler deploy --dry-run --outdir dist"
   },
   "dependencies": {
     "@tpx/contracts": "workspace:*",
+    "@tpx/convex": "workspace:*",
     "@tpx/convex-client": "workspace:*",
     "@tpx/identity": "workspace:*",
     "convex": "1.46.0",
@@ -26,7 +25,6 @@
     "@cloudflare/workers-types": "5.20260917.1",
     "convex-test": "0.0.59",
     "typescript": "5.9.3",
-    "vite": "8.3.0",
     "vitest": "4.1.11",
     "wrangler": "4.134.0"
   }

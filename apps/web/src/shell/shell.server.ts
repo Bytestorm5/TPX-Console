@@ -36,7 +36,9 @@ export async function sidebarFor(
     projects,
     sidebar: {
       mode: isFixtureMode(env) ? "fixture" : "clerk",
+      tenantId: session.tenant.id,
       tenantName: session.tenant.name,
+      tenants: session.tenants,
       user: { name: session.identity.displayName, email: session.identity.email },
       projects,
       project: scope?.project ?? null,

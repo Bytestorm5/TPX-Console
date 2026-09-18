@@ -9,8 +9,8 @@
  */
 import { v } from "convex/values";
 import type { IndexRange, IndexRangeBuilder } from "convex/server";
-import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "../_generated/server";
+import type { Doc } from "../_generated/dataModel";
 
 const grantRow = v.object({
   id: v.string(),
@@ -68,7 +68,7 @@ const grantFilter = v.object({
   roleId: v.optional(v.union(v.string(), v.null())),
 });
 
-const grantOut = (d: Doc<"alfizGrants">) => ({
+const grantOut = (d: Doc<"auth_alfizGrants">) => ({
   id: d.grantId,
   subject: d.subject,
   ...(d.roleId === undefined ? {} : { roleId: d.roleId }),
@@ -78,7 +78,7 @@ const grantOut = (d: Doc<"alfizGrants">) => ({
   provenance: d.provenance as unknown,
   createdAt: d.createdAt,
 });
-const revokeOut = (d: Doc<"alfizRevokes">) => ({
+const revokeOut = (d: Doc<"auth_alfizRevokes">) => ({
   id: d.revokeId,
   userId: d.userId,
   pattern: d.pattern,
@@ -86,28 +86,28 @@ const revokeOut = (d: Doc<"alfizRevokes">) => ({
   provenance: d.provenance as unknown,
   createdAt: d.createdAt,
 });
-const roleOut = (d: Doc<"alfizRoles">) => ({
+const roleOut = (d: Doc<"auth_alfizRoles">) => ({
   id: d.roleId,
   name: d.name,
   ...(d.description === undefined ? {} : { description: d.description }),
   patterns: d.patterns,
   ...(d.requestable === undefined ? {} : { requestable: d.requestable as unknown }),
 });
-const groupOut = (d: Doc<"alfizGroups">) => ({
+const groupOut = (d: Doc<"auth_alfizGroups">) => ({
   id: d.groupId,
   name: d.name,
   ...(d.description === undefined ? {} : { description: d.description }),
   parents: d.parents,
   ...(d.virtual ? { virtual: true } : {}),
 });
-const userOut = (d: Doc<"alfizUsers">) => ({
+const userOut = (d: Doc<"auth_alfizUsers">) => ({
   userId: d.userId,
   active: d.active,
   groupIds: d.groupIds,
   orgIds: d.orgIds,
   managerUserId: d.managerUserId,
 });
-const auditOut = (d: Doc<"alfizAudit">) => ({
+const auditOut = (d: Doc<"auth_alfizAudit">) => ({
   id: d.auditId,
   at: d.at,
   actor: d.actor,
@@ -129,7 +129,7 @@ type GrantFilterArg = {
 async function grantsMatching(
   ctx: QueryCtx | MutationCtx,
   filter: GrantFilterArg | undefined,
-): Promise<Doc<"alfizGrants">[] | null> {
+): Promise<Doc<"auth_alfizGrants">[] | null> {
   let subjects: string[] | null = null;
   if (filter?.subject !== undefined && filter.subjects !== undefined) {
     if (!filter.subjects.includes(filter.subject)) return null;
@@ -142,13 +142,13 @@ async function grantsMatching(
   }
   if (filter?.roleId !== undefined && typeof filter.roleId !== "string") return null;
 
-  let rows: Doc<"alfizGrants">[];
+  let rows: Doc<"auth_alfizGrants">[];
   if (subjects !== null) {
     rows = [];
     for (const subject of subjects) {
       rows.push(
         ...(await ctx.db
-          .query("alfizGrants")
+          .query("auth_alfizGrants")
           .withIndex("by_subject", (q) => q.eq("subject", subject))
           .collect()),
       );
@@ -156,17 +156,17 @@ async function grantsMatching(
   } else if (filter?.scope !== undefined) {
     const scope = filter.scope;
     rows = await ctx.db
-      .query("alfizGrants")
+      .query("auth_alfizGrants")
       .withIndex("by_scope", (q) => q.eq("scope", scope))
       .collect();
   } else if (typeof filter?.roleId === "string") {
     const roleId = filter.roleId;
     rows = await ctx.db
-      .query("alfizGrants")
+      .query("auth_alfizGrants")
       .withIndex("by_roleId", (q) => q.eq("roleId", roleId))
       .collect();
   } else {
-    rows = await ctx.db.query("alfizGrants").collect();
+    rows = await ctx.db.query("auth_alfizGrants").collect();
   }
   return rows
     .filter((r) => filter?.scope === undefined || r.scope === filter.scope)
@@ -179,11 +179,11 @@ export const insertGrant = internalMutation({
   args: { row: grantRow },
   handler: async (ctx, { row }) => {
     const existing = await ctx.db
-      .query("alfizGrants")
+      .query("auth_alfizGrants")
       .withIndex("by_grantId", (q) => q.eq("grantId", row.id))
       .unique();
     if (existing) throw new Error(`alfiz: a grant with id ${JSON.stringify(row.id)} already exists`);
-    await ctx.db.insert("alfizGrants", {
+    await ctx.db.insert("auth_alfizGrants", {
       grantId: row.id,
       subject: row.subject,
       ...(row.roleId === undefined ? {} : { roleId: row.roleId }),
@@ -200,7 +200,7 @@ export const deleteGrant = internalMutation({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const existing = await ctx.db
-      .query("alfizGrants")
+      .query("auth_alfizGrants")
       .withIndex("by_grantId", (q) => q.eq("grantId", id))
       .unique();
     if (!existing) return null;
@@ -229,11 +229,11 @@ export const countGrants = internalQuery({
 export const listGrantsInScopes = internalQuery({
   args: { scopes: v.array(v.string()) },
   handler: async (ctx, { scopes }) => {
-    const out: Doc<"alfizGrants">[] = [];
+    const out: Doc<"auth_alfizGrants">[] = [];
     for (const scope of new Set(scopes)) {
       out.push(
         ...(await ctx.db
-          .query("alfizGrants")
+          .query("auth_alfizGrants")
           .withIndex("by_scope", (q) => q.eq("scope", scope))
           .collect()),
       );
@@ -247,11 +247,11 @@ export const insertRevoke = internalMutation({
   args: { row: revokeRow },
   handler: async (ctx, { row }) => {
     const existing = await ctx.db
-      .query("alfizRevokes")
+      .query("auth_alfizRevokes")
       .withIndex("by_revokeId", (q) => q.eq("revokeId", row.id))
       .unique();
     if (existing) throw new Error(`alfiz: a revoke with id ${JSON.stringify(row.id)} already exists`);
-    await ctx.db.insert("alfizRevokes", {
+    await ctx.db.insert("auth_alfizRevokes", {
       revokeId: row.id,
       userId: row.userId,
       pattern: row.pattern,
@@ -266,7 +266,7 @@ export const deleteRevoke = internalMutation({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const existing = await ctx.db
-      .query("alfizRevokes")
+      .query("auth_alfizRevokes")
       .withIndex("by_revokeId", (q) => q.eq("revokeId", id))
       .unique();
     if (!existing) return null;
@@ -278,21 +278,21 @@ export const deleteRevoke = internalMutation({
 export const listRevokes = internalQuery({
   args: { filter: v.optional(v.object({ userId: v.optional(v.string()), scope: v.optional(v.string()) })) },
   handler: async (ctx, { filter }) => {
-    let rows: Doc<"alfizRevokes">[];
+    let rows: Doc<"auth_alfizRevokes">[];
     if (filter?.userId !== undefined) {
       const userId = filter.userId;
       rows = await ctx.db
-        .query("alfizRevokes")
+        .query("auth_alfizRevokes")
         .withIndex("by_userId", (q) => q.eq("userId", userId))
         .collect();
     } else if (filter?.scope !== undefined) {
       const scope = filter.scope;
       rows = await ctx.db
-        .query("alfizRevokes")
+        .query("auth_alfizRevokes")
         .withIndex("by_scope", (q) => q.eq("scope", scope))
         .collect();
     } else {
-      rows = await ctx.db.query("alfizRevokes").collect();
+      rows = await ctx.db.query("auth_alfizRevokes").collect();
     }
     return rows
       .filter((r) => filter?.scope === undefined || r.scope === filter.scope)
@@ -306,7 +306,7 @@ export const upsertRole = internalMutation({
   args: { role: roleRow },
   handler: async (ctx, { role }) => {
     const existing = await ctx.db
-      .query("alfizRoles")
+      .query("auth_alfizRoles")
       .withIndex("by_roleId", (q) => q.eq("roleId", role.id))
       .unique();
     const doc = {
@@ -317,7 +317,7 @@ export const upsertRole = internalMutation({
       ...(role.requestable === undefined ? {} : { requestable: role.requestable }),
     };
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("alfizRoles", doc);
+    else await ctx.db.insert("auth_alfizRoles", doc);
   },
 });
 
@@ -325,7 +325,7 @@ export const getRole = internalQuery({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const row = await ctx.db
-      .query("alfizRoles")
+      .query("auth_alfizRoles")
       .withIndex("by_roleId", (q) => q.eq("roleId", id))
       .unique();
     return row ? roleOut(row) : null;
@@ -338,7 +338,7 @@ export const getRoles = internalQuery({
     const out = [];
     for (const id of new Set(ids)) {
       const row = await ctx.db
-        .query("alfizRoles")
+        .query("auth_alfizRoles")
         .withIndex("by_roleId", (q) => q.eq("roleId", id))
         .unique();
       if (row) out.push(roleOut(row));
@@ -349,14 +349,14 @@ export const getRoles = internalQuery({
 
 export const listRoles = internalQuery({
   args: {},
-  handler: async (ctx) => (await ctx.db.query("alfizRoles").collect()).map(roleOut),
+  handler: async (ctx) => (await ctx.db.query("auth_alfizRoles").collect()).map(roleOut),
 });
 
 export const deleteRole = internalMutation({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const row = await ctx.db
-      .query("alfizRoles")
+      .query("auth_alfizRoles")
       .withIndex("by_roleId", (q) => q.eq("roleId", id))
       .unique();
     if (row) await ctx.db.delete(row._id);
@@ -368,7 +368,7 @@ export const upsertGroup = internalMutation({
   args: { group: groupRow },
   handler: async (ctx, { group }) => {
     const existing = await ctx.db
-      .query("alfizGroups")
+      .query("auth_alfizGroups")
       .withIndex("by_groupId", (q) => q.eq("groupId", group.id))
       .unique();
     const doc = {
@@ -379,7 +379,7 @@ export const upsertGroup = internalMutation({
       virtual: group.virtual ?? false,
     };
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("alfizGroups", doc);
+    else await ctx.db.insert("auth_alfizGroups", doc);
   },
 });
 
@@ -387,7 +387,7 @@ export const getGroup = internalQuery({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const row = await ctx.db
-      .query("alfizGroups")
+      .query("auth_alfizGroups")
       .withIndex("by_groupId", (q) => q.eq("groupId", id))
       .unique();
     return row ? groupOut(row) : null;
@@ -396,19 +396,19 @@ export const getGroup = internalQuery({
 
 export const listGroups = internalQuery({
   args: {},
-  handler: async (ctx) => (await ctx.db.query("alfizGroups").collect()).map(groupOut),
+  handler: async (ctx) => (await ctx.db.query("auth_alfizGroups").collect()).map(groupOut),
 });
 
 export const deleteGroup = internalMutation({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const memberships = await ctx.db
-      .query("alfizMemberships")
+      .query("auth_alfizMemberships")
       .withIndex("by_groupId", (q) => q.eq("groupId", id))
       .collect();
     for (const m of memberships) await ctx.db.delete(m._id);
     const row = await ctx.db
-      .query("alfizGroups")
+      .query("auth_alfizGroups")
       .withIndex("by_groupId", (q) => q.eq("groupId", id))
       .unique();
     if (row) await ctx.db.delete(row._id);
@@ -420,7 +420,7 @@ export const getUser = internalQuery({
   args: { userId: v.string() },
   handler: async (ctx, { userId }) => {
     const row = await ctx.db
-      .query("alfizUsers")
+      .query("auth_alfizUsers")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .unique();
     return row ? userOut(row) : null;
@@ -431,7 +431,7 @@ export const upsertUser = internalMutation({
   args: { user: userRow },
   handler: async (ctx, { user }) => {
     const existing = await ctx.db
-      .query("alfizUsers")
+      .query("auth_alfizUsers")
       .withIndex("by_userId", (q) => q.eq("userId", user.userId))
       .unique();
     const doc = {
@@ -442,10 +442,10 @@ export const upsertUser = internalMutation({
       managerUserId: user.managerUserId,
     };
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("alfizUsers", doc);
+    else await ctx.db.insert("auth_alfizUsers", doc);
     // Reconcile the membership edge table so listUsersInGroup is one index read.
     const current = await ctx.db
-      .query("alfizMemberships")
+      .query("auth_alfizMemberships")
       .withIndex("by_userId", (q) => q.eq("userId", user.userId))
       .collect();
     const want = new Set(doc.groupIds);
@@ -453,7 +453,7 @@ export const upsertUser = internalMutation({
       if (!want.has(m.groupId)) await ctx.db.delete(m._id);
       else want.delete(m.groupId);
     }
-    for (const groupId of want) await ctx.db.insert("alfizMemberships", { userId: user.userId, groupId });
+    for (const groupId of want) await ctx.db.insert("auth_alfizMemberships", { userId: user.userId, groupId });
   },
 });
 
@@ -461,12 +461,12 @@ export const deleteUser = internalMutation({
   args: { userId: v.string() },
   handler: async (ctx, { userId }) => {
     const memberships = await ctx.db
-      .query("alfizMemberships")
+      .query("auth_alfizMemberships")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .collect();
     for (const m of memberships) await ctx.db.delete(m._id);
     const row = await ctx.db
-      .query("alfizUsers")
+      .query("auth_alfizUsers")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .unique();
     if (row) await ctx.db.delete(row._id);
@@ -475,7 +475,7 @@ export const deleteUser = internalMutation({
 
 export const listUsers = internalQuery({
   args: {},
-  handler: async (ctx) => (await ctx.db.query("alfizUsers").collect()).map(userOut),
+  handler: async (ctx) => (await ctx.db.query("auth_alfizUsers").collect()).map(userOut),
 });
 
 export const listUsersInGroup = internalQuery({
@@ -483,7 +483,7 @@ export const listUsersInGroup = internalQuery({
   handler: async (ctx, { groupId }) =>
     (
       await ctx.db
-        .query("alfizMemberships")
+        .query("auth_alfizMemberships")
         .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
         .collect()
     )
@@ -497,11 +497,11 @@ export const insertRequest = internalMutation({
   handler: async (ctx, { request }) => {
     const r = request as { id: string; requesterUserId: string; state: string; createdAt: number };
     const existing = await ctx.db
-      .query("alfizRequests")
+      .query("auth_alfizRequests")
       .withIndex("by_requestId", (q) => q.eq("requestId", r.id))
       .unique();
     if (existing) throw new Error(`alfiz: a request with id ${JSON.stringify(r.id)} already exists`);
-    await ctx.db.insert("alfizRequests", {
+    await ctx.db.insert("auth_alfizRequests", {
       requestId: r.id,
       requesterUserId: r.requesterUserId,
       state: r.state,
@@ -523,11 +523,11 @@ export const updateRequest = internalMutation({
       createdAt: r.createdAt,
     };
     const existing = await ctx.db
-      .query("alfizRequests")
+      .query("auth_alfizRequests")
       .withIndex("by_requestId", (q) => q.eq("requestId", r.id))
       .unique();
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("alfizRequests", doc);
+    else await ctx.db.insert("auth_alfizRequests", doc);
   },
 });
 
@@ -535,7 +535,7 @@ export const getRequest = internalQuery({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const row = await ctx.db
-      .query("alfizRequests")
+      .query("auth_alfizRequests")
       .withIndex("by_requestId", (q) => q.eq("requestId", id))
       .unique();
     return row ? (row.payload as unknown) : null;
@@ -545,21 +545,21 @@ export const getRequest = internalQuery({
 export const listRequests = internalQuery({
   args: { filter: v.optional(v.object({ state: v.optional(v.string()), requesterUserId: v.optional(v.string()) })) },
   handler: async (ctx, { filter }) => {
-    let rows: Doc<"alfizRequests">[];
+    let rows: Doc<"auth_alfizRequests">[];
     if (filter?.state !== undefined) {
       const state = filter.state;
       rows = await ctx.db
-        .query("alfizRequests")
+        .query("auth_alfizRequests")
         .withIndex("by_state", (q) => q.eq("state", state))
         .collect();
     } else if (filter?.requesterUserId !== undefined) {
       const requester = filter.requesterUserId;
       rows = await ctx.db
-        .query("alfizRequests")
+        .query("auth_alfizRequests")
         .withIndex("by_requester", (q) => q.eq("requesterUserId", requester))
         .collect();
     } else {
-      rows = await ctx.db.query("alfizRequests").withIndex("by_createdAt").collect();
+      rows = await ctx.db.query("auth_alfizRequests").withIndex("by_createdAt").collect();
     }
     return rows
       .filter((r) => filter?.requesterUserId === undefined || r.requesterUserId === filter.requesterUserId)
@@ -573,19 +573,19 @@ export const putCatalog = internalMutation({
   args: { version: v.number(), document: v.any(), publishedAt: v.optional(v.number()) },
   handler: async (ctx, { version, document, publishedAt }) => {
     const existing = await ctx.db
-      .query("alfizCatalog")
+      .query("auth_alfizCatalog")
       .withIndex("by_version", (q) => q.eq("version", version))
       .unique();
     const doc = { version, document, publishedAt: publishedAt ?? 0 };
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("alfizCatalog", doc);
+    else await ctx.db.insert("auth_alfizCatalog", doc);
   },
 });
 
 export const getCatalog = internalQuery({
   args: {},
   handler: async (ctx) => {
-    const row = await ctx.db.query("alfizCatalog").withIndex("by_version").order("desc").first();
+    const row = await ctx.db.query("auth_alfizCatalog").withIndex("by_version").order("desc").first();
     return row ? { version: row.version, document: row.document as unknown } : null;
   },
 });
@@ -594,7 +594,7 @@ export const getCatalogVersion = internalQuery({
   args: { version: v.number() },
   handler: async (ctx, { version }) => {
     const row = await ctx.db
-      .query("alfizCatalog")
+      .query("auth_alfizCatalog")
       .withIndex("by_version", (q) => q.eq("version", version))
       .unique();
     return row ? { version: row.version, document: row.document as unknown, publishedAt: row.publishedAt } : null;
@@ -604,7 +604,7 @@ export const getCatalogVersion = internalQuery({
 export const listCatalogVersions = internalQuery({
   args: {},
   handler: async (ctx) =>
-    (await ctx.db.query("alfizCatalog").withIndex("by_version").order("asc").collect()).map((r) => ({
+    (await ctx.db.query("auth_alfizCatalog").withIndex("by_version").order("asc").collect()).map((r) => ({
       version: r.version,
       publishedAt: r.publishedAt,
     })),
@@ -614,12 +614,12 @@ export const putImports = internalMutation({
   args: { version: v.number(), manifest: v.any() },
   handler: async (ctx, { version, manifest }) => {
     const existing = await ctx.db
-      .query("alfizImports")
+      .query("auth_alfizImports")
       .withIndex("by_key", (q) => q.eq("key", "singleton"))
       .unique();
     const doc = { key: "singleton" as const, version, manifest };
     if (existing) await ctx.db.replace(existing._id, doc);
-    else await ctx.db.insert("alfizImports", doc);
+    else await ctx.db.insert("auth_alfizImports", doc);
   },
 });
 
@@ -627,7 +627,7 @@ export const getImports = internalQuery({
   args: {},
   handler: async (ctx) => {
     const row = await ctx.db
-      .query("alfizImports")
+      .query("auth_alfizImports")
       .withIndex("by_key", (q) => q.eq("key", "singleton"))
       .unique();
     return row ? { version: row.version, manifest: row.manifest as unknown } : null;
@@ -638,7 +638,7 @@ export const getImports = internalQuery({
 export const appendAudit = internalMutation({
   args: { event: auditRow },
   handler: async (ctx, { event }) => {
-    await ctx.db.insert("alfizAudit", {
+    await ctx.db.insert("auth_alfizAudit", {
       auditId: event.id,
       at: event.at,
       actor: event.actor,
@@ -674,13 +674,13 @@ export const listAudit = internalQuery({
     }
     const limit = filter?.limit;
     if (limit !== undefined && limit <= 0) return [];
-    const byKey = (a: Doc<"alfizAudit">, b: Doc<"alfizAudit">) =>
+    const byKey = (a: Doc<"auth_alfizAudit">, b: Doc<"auth_alfizAudit">) =>
       a.at - b.at || (a.auditId < b.auditId ? -1 : a.auditId > b.auditId ? 1 : 0);
     // Pick the most selective index; range on `at` inside it.
-    let rows: Doc<"alfizAudit">[];
+    let rows: Doc<"auth_alfizAudit">[];
     const from = filter?.from;
     const to = filter?.to;
-    const range = (q: IndexRangeBuilder<Doc<"alfizAudit">, any, any>): IndexRange => {
+    const range = (q: IndexRangeBuilder<Doc<"auth_alfizAudit">, any, any>): IndexRange => {
       if (from !== undefined && to !== undefined) return q.gte("at", from).lt("at", to);
       if (from !== undefined) return q.gte("at", from);
       if (to !== undefined) return q.lt("at", to);
@@ -689,24 +689,24 @@ export const listAudit = internalQuery({
     if (filter?.target !== undefined) {
       const target = filter.target;
       rows = await ctx.db
-        .query("alfizAudit")
+        .query("auth_alfizAudit")
         .withIndex("by_target", (q) => range(q.eq("target", target)))
         .collect();
     } else if (filter?.actor !== undefined) {
       const actor = filter.actor;
       rows = await ctx.db
-        .query("alfizAudit")
+        .query("auth_alfizAudit")
         .withIndex("by_actor", (q) => range(q.eq("actor", actor)))
         .collect();
     } else if (filter?.action !== undefined) {
       const action = filter.action;
       rows = await ctx.db
-        .query("alfizAudit")
+        .query("auth_alfizAudit")
         .withIndex("by_action", (q) => range(q.eq("action", action)))
         .collect();
     } else {
       rows = await ctx.db
-        .query("alfizAudit")
+        .query("auth_alfizAudit")
         .withIndex("by_at", (q) => range(q))
         .collect();
     }
@@ -727,11 +727,11 @@ export const listAudit = internalQuery({
 // -- invalidation events (the epoch) -----------------------------------------
 async function epochRow(ctx: MutationCtx) {
   const existing = await ctx.db
-    .query("alfizEpoch")
+    .query("auth_alfizEpoch")
     .withIndex("by_key", (q) => q.eq("key", "singleton"))
     .unique();
   if (existing) return existing;
-  const id = await ctx.db.insert("alfizEpoch", { key: "singleton", seq: 0, prunedThrough: 0 });
+  const id = await ctx.db.insert("auth_alfizEpoch", { key: "singleton", seq: 0, prunedThrough: 0 });
   const created = await ctx.db.get(id);
   if (!created) throw new Error("alfiz: could not create the epoch row");
   return created;
@@ -745,7 +745,7 @@ export const appendEvents = internalMutation({
     await ctx.db.patch(epoch._id, { seq: upTo });
     for (const [index, event] of events.entries()) {
       const e = event as { type: string };
-      await ctx.db.insert("alfizEvents", { seq: epoch.seq + index + 1, type: e.type, payload: event, at });
+      await ctx.db.insert("auth_alfizEvents", { seq: epoch.seq + index + 1, type: e.type, payload: event, at });
     }
     return { upTo };
   },
@@ -755,7 +755,7 @@ export const headSeq = internalQuery({
   args: {},
   handler: async (ctx) => {
     const row = await ctx.db
-      .query("alfizEpoch")
+      .query("auth_alfizEpoch")
       .withIndex("by_key", (q) => q.eq("key", "singleton"))
       .unique();
     return row?.seq ?? 0;
@@ -766,14 +766,14 @@ export const eventsSince = internalQuery({
   args: { seq: v.number(), limit: v.number() },
   handler: async (ctx, { seq, limit }) => {
     const head = await ctx.db
-      .query("alfizEpoch")
+      .query("auth_alfizEpoch")
       .withIndex("by_key", (q) => q.eq("key", "singleton"))
       .unique();
     if (!head) return { upTo: seq, events: [] as unknown[] };
     if (seq < head.prunedThrough) return { gap: true as const };
     const take = Math.max(0, Math.trunc(limit)) || 1000;
     const rows = await ctx.db
-      .query("alfizEvents")
+      .query("auth_alfizEvents")
       .withIndex("by_seq", (q) => q.gt("seq", seq))
       .order("asc")
       .take(take);
@@ -793,7 +793,7 @@ export const pruneEvents = internalMutation({
   args: { cutoff: v.object({ at: v.optional(v.number()), keepRows: v.optional(v.number()) }) },
   handler: async (ctx, { cutoff }) => {
     const head = await ctx.db
-      .query("alfizEpoch")
+      .query("auth_alfizEpoch")
       .withIndex("by_key", (q) => q.eq("key", "singleton"))
       .unique();
     if (!head) return 0;
@@ -801,7 +801,7 @@ export const pruneEvents = internalMutation({
     if (cutoff.at !== undefined) {
       const at = cutoff.at;
       const older = await ctx.db
-        .query("alfizEvents")
+        .query("auth_alfizEvents")
         .withIndex("by_at", (q) => q.lt("at", at))
         .collect();
       for (const e of older) if (e.seq > pruneUpTo) pruneUpTo = e.seq;
@@ -812,7 +812,7 @@ export const pruneEvents = internalMutation({
     }
     if (pruneUpTo <= head.prunedThrough) return 0;
     const doomed = await ctx.db
-      .query("alfizEvents")
+      .query("auth_alfizEvents")
       .withIndex("by_seq", (q) => q.lte("seq", pruneUpTo))
       .collect();
     for (const e of doomed) await ctx.db.delete(e._id);

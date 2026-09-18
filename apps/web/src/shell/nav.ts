@@ -101,6 +101,7 @@ export const WORKSPACE_ENTRIES: readonly { label: string; to: string; requires?:
   { label: "Members", to: "/org/members", requires: "tpx.workspace.members.read" },
   { label: "Access", to: "/org/access", requires: "tpx.workspace.access.read" },
   { label: "Audit", to: "/org/audit", requires: "tpx.workspace.audit.read" },
+  { label: "Settings", to: "/org/settings", requires: "tpx.workspace.settings.read" },
 ];
 
 export function buildWorkspaceGroup(input: Pick<NavInput, "tenantGrants">): NavGroup {

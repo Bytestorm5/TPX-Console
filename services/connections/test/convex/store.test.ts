@@ -1,12 +1,10 @@
-/// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import type { ConvexCaller } from "@tpx/convex-client";
-import schema from "../../convex/schema";
+import schema from "@tpx/convex/schema";
+import { modules } from "@tpx/convex/test-modules";
 import { convexStore } from "../../src/store/convex-store";
 import type { AttachmentRow, ConnectionRow, SecretRow } from "../../src/store/types";
-
-const modules = import.meta.glob("../../convex/**/*.*s");
 
 function freshStore() {
   const t = convexTest(schema, modules);

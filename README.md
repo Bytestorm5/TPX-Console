@@ -1,6 +1,6 @@
 # Trusplex Console
 
-One repository, many Cloudflare Workers, one public application. `tpx-web` serves the console; every product is its own Worker, reachable only by service binding; Clerk signs users in; [Alfiz](https://www.npmjs.com/package/@alfiz/core) decides what they may do; Convex stores the data.
+One repository, many Cloudflare Workers, one public application. `tpx-web` serves the console; every product is its own Worker, reachable only by service binding; Clerk signs users in (and nothing more); [Alfiz](https://www.npmjs.com/package/@alfiz/core) owns tenants, membership and what everyone may do; one Convex deployment stores the data, tables prefixed by service.
 
 ```
 apps/web            tpx-web — assets, SSR, /api/<product>/* forwarder, every service binding
@@ -10,6 +10,7 @@ packages/contracts  Zod schemas + RPC interfaces shared by web and services (als
 packages/identity   the Alfiz catalog, roles, scope helpers, typed errors
 packages/tokens     the Trusplex design tokens (CSS variables, Tailwind theme, JS mirror)
 packages/ui         the console's primitives, built on the tokens only
+packages/convex     the single Convex deployment: every service's functions and service-prefixed tables
 packages/convex-client a tiny caller for Convex's HTTP API from Workers
 scripts/            the boundary checks CI runs
 ```
@@ -21,9 +22,9 @@ pnpm install
 pnpm dev:fixture          # http://localhost:5173 — no Clerk, no Convex needed
 ```
 
-`dev:fixture` runs the whole topology in workerd (tpx-web plus both services, wired by service bindings exactly as in production) with a fixture identity (`Ada Fixture`, org admin of "Ada's Org") and in-memory stores. It is the fastest way to see the console and what the Playwright suite runs against.
+`dev:fixture` runs the whole topology in workerd (tpx-web plus both services, wired by service bindings exactly as in production) with a fixture identity (`Ada Fixture`, who gets "Ada's Org" on first sign-in) and in-memory stores. It is the fastest way to see the console and what the Playwright suite runs against.
 
-For the real thing, see [docs/setup.md](docs/setup.md): Clerk keys, one Convex deployment per service, and the secrets each Worker needs.
+For the real thing, see [docs/setup.md](docs/setup.md): Clerk keys, the Convex deployment, and the secrets each Worker needs.
 
 ## Check it
 

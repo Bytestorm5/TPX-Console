@@ -6,6 +6,10 @@
  * authority or destroys data, re-checks freshly against the org root
  * (`can.fresh`) so a stale context can never widen access. Nothing here is
  * reachable from the internet: the Worker has no routes.
+ *
+ * Clerk only says who the user is. Tenants, membership and invitations are
+ * the console's own rows, and membership is mirrored into Alfiz's directory
+ * (`org:<tenantId>` in the user's closure) so tenant-wide grants apply.
  */
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { z } from "zod";
@@ -16,20 +20,27 @@ import {
   CreateProjectInputSchema,
   UpdateProjectInputSchema,
   UpdateTenantEnvironmentsInputSchema,
+  InviteMemberInputSchema,
+  ProfileInputSchema,
+  UpdateTenantInputSchema,
   type AuditEntry,
   type AuthServiceContract,
   type CreateGrantInput,
-  type EnsureTenantInput,
   type EnsureUserInput,
   type Environment,
   type EpochSinceWire,
   type GrantView,
+  type Invite,
+  type InviteResult,
+  type Member,
   type PrincipalRefWire,
   type Project,
   type ResolvedScope,
   type RoleView,
   type SubjectAccessWire,
   type Tenant,
+  type TenantSummary,
+  type UserSession,
 } from "@tpx/contracts/auth";
 import type { ProductCapabilities } from "@tpx/contracts/product";
 import {
@@ -48,6 +59,7 @@ import {
   ROLE_IDS,
   ValidationError,
   catalog,
+  defaultTenantName,
   environmentScope,
   parseTpxScope,
   projectScope,
@@ -70,19 +82,14 @@ export interface AuthEnv {
 }
 
 const DEFAULT_VOCABULARY = ["prod"];
-const CLERK_ADMIN_SOURCE = "clerk:org:admin";
+const DIRECTORY_SOURCE = "tpx-auth";
 const AUDIT_LIMIT_DEFAULT = 100;
 const AUDIT_LIMIT_MAX = 500;
 const ENSURE_USER_TTL_MS = 60_000;
 const SEP = "|";
 
-const EnsureUserInputSchema = z.object({ userId: IdSchema, orgId: IdSchema, orgRole: z.string().max(64).nullable() });
-const EnsureTenantInputSchema = z.object({
-  orgId: IdSchema,
-  name: z.string().trim().min(1).max(120),
-  creatorUserId: IdSchema,
-});
-const RemoveMemberInputSchema = z.object({ orgId: IdSchema, userId: IdSchema });
+const EnsureUserInputSchema = z.object({ userId: IdSchema, profile: ProfileInputSchema.optional() });
+const CreateTenantInputSchema = z.object({ name: z.string().trim().min(1).max(120), creatorUserId: IdSchema });
 const ResolveScopeInputSchema = z.object({
   tenantId: IdSchema,
   projectSlug: z.string().min(1).max(64),
@@ -334,50 +341,34 @@ export class AuthService extends WorkerEntrypoint<AuthEnv> implements AuthServic
   }
 
   // -- identity bootstrap (ingress) ------------------------------------------------
-  async ensureUser(input: EnsureUserInput): Promise<void> {
-    const { userId, orgId, orgRole } = parse(EnsureUserInputSchema, input);
-    const memoKey = `${userId}${SEP}${orgId}${SEP}${orgRole ?? ""}`;
-    const seen = ensureUserSeen.get(memoKey);
-    if (seen !== undefined && Date.now() - seen < ENSURE_USER_TTL_MS) return;
-    const rt = await this.#runtime();
-
+  /** Alfiz's directory is the authority for `org:<tenant>` closure: keep the user's org ids in step with memberships. */
+  async #syncDirectory(rt: AlfizRuntime, userId: string): Promise<void> {
+    const memberships = await rt.store.tenancy.listMemberships(userId);
+    const orgIds = memberships.map((m) => m.tenantId);
     const user = await rt.store.alfiz.getUser(userId);
-    if (!user || !user.orgIds.includes(orgId)) {
-      await rt.app.importDirectory(
-        { users: [{ userId }], orgs: { [userId]: [...(user?.orgIds ?? []), orgId] } },
-        "clerk",
-      );
-    }
-
-    // Mirror Clerk's org:admin as a tpx-admin grant at the tenant, and only that:
-    // rows carry a distinct provenance so administrator-made grants are never touched.
-    const scope = tenantScope(orgId);
-    const mirrored = (await rt.app.listGrants({ subject: userSubject(userId), scope, roleId: ROLE_IDS.admin })).filter(
-      (g) => g.provenance.kind === "import" && g.provenance.source === CLERK_ADMIN_SOURCE,
-    );
-    if (orgRole === "org:admin" && mirrored.length === 0) {
-      await rt.app.createGrant({
-        subject: userSubject(userId),
-        roleId: ROLE_IDS.admin,
-        scope,
-        provenance: { kind: "import", source: CLERK_ADMIN_SOURCE },
-      });
-    } else if (orgRole !== "org:admin") {
-      for (const g of mirrored) await rt.app.deleteGrant(g.id, { kind: "system", note: "clerk org role changed" });
-    }
-    // Only the latest role is memoised: a stale member→admin→member cycle must never short-circuit.
-    for (const key of ensureUserSeen.keys())
-      if (key.startsWith(`${userId}${SEP}${orgId}${SEP}`)) ensureUserSeen.delete(key);
-    ensureUserSeen.set(memoKey, Date.now());
+    const same = user && user.orgIds.length === orgIds.length && orgIds.every((id) => user.orgIds.includes(id));
+    if (same) return;
+    await rt.app.importDirectory({ users: [{ userId }], orgs: { [userId]: orgIds } }, DIRECTORY_SOURCE);
   }
 
-  async ensureTenant(input: EnsureTenantInput): Promise<Tenant> {
-    const { orgId, name, creatorUserId } = parse(EnsureTenantInputSchema, input);
-    const rt = await this.#runtime();
-    const existing = await rt.store.tenancy.getTenant(orgId);
-    if (existing) return existing;
+  async #addMember(
+    rt: AlfizRuntime,
+    tenantId: string,
+    userId: string,
+    roleId: string,
+    provenance: Provenance,
+    invitedBy: string | null,
+  ): Promise<void> {
+    const inserted = await rt.store.tenancy.insertMembership({ tenantId, userId, joinedAt: Date.now(), invitedBy });
+    if (!inserted) return;
+    await this.#syncDirectory(rt, userId);
+    await rt.app.createGrant({ subject: userSubject(userId), roleId, scope: tenantScope(tenantId), provenance });
+    await this.#audit(rt, tenantId, invitedBy ?? "system", "member.add", userId, { roleId });
+  }
+
+  async #createTenantRows(rt: AlfizRuntime, name: string, creatorUserId: string): Promise<Tenant> {
     const tenant: Tenant = {
-      id: orgId,
+      id: newId("tnt"),
       name,
       environments: [...DEFAULT_VOCABULARY],
       projectDefaults: [...DEFAULT_VOCABULARY],
@@ -385,37 +376,104 @@ export class AuthService extends WorkerEntrypoint<AuthEnv> implements AuthServic
       createdAt: Date.now(),
     };
     const inserted = await rt.store.tenancy.insertTenant(tenant);
-    if (!inserted) return this.#tenant(rt, orgId);
+    if (!inserted) throw new ConflictError("tenant id collision");
+    await rt.store.tenancy.insertMembership({
+      tenantId: tenant.id,
+      userId: creatorUserId,
+      joinedAt: tenant.createdAt,
+      invitedBy: null,
+    });
+    await this.#syncDirectory(rt, creatorUserId);
     await rt.app.createGrants(
       [
-        { subject: userSubject(creatorUserId), roleId: ROLE_IDS.owner, scope: tenantScope(orgId) },
-        { subject: orgSubject(orgId), roleId: ROLE_IDS.member, scope: tenantScope(orgId) },
+        { subject: userSubject(creatorUserId), roleId: ROLE_IDS.owner, scope: tenantScope(tenant.id) },
+        { subject: orgSubject(tenant.id), roleId: ROLE_IDS.member, scope: tenantScope(tenant.id) },
       ],
       { kind: "system", note: "tenant bootstrap" },
     );
-    await this.#audit(rt, orgId, creatorUserId, "tenant.create", orgId, { name });
+    await this.#audit(rt, tenant.id, creatorUserId, "tenant.create", tenant.id, { name });
     await this.#createProjectRows(rt, tenant, { name: "Default", slug: "default" }, creatorUserId);
     return tenant;
   }
 
-  async findTenant(orgId: string): Promise<Tenant | null> {
-    const rt = await this.#runtime();
-    return rt.store.tenancy.getTenant(parse(IdSchema, orgId));
+  async #tenantSummaries(rt: AlfizRuntime, userId: string): Promise<TenantSummary[]> {
+    const memberships = await rt.store.tenancy.listMemberships(userId);
+    const tenants = await Promise.all(memberships.map((m) => rt.store.tenancy.getTenant(m.tenantId)));
+    return memberships.flatMap((m, i) => {
+      const tenant = tenants[i];
+      return tenant ? [{ id: tenant.id, name: tenant.name, joinedAt: m.joinedAt }] : [];
+    });
   }
 
-  async removeMember(input: { orgId: string; userId: string }): Promise<void> {
-    const { orgId, userId } = parse(RemoveMemberInputSchema, input);
+  async ensureUser(input: EnsureUserInput): Promise<UserSession> {
+    const { userId, profile } = parse(EnsureUserInputSchema, input);
     const rt = await this.#runtime();
-    const scopes = new Set(await this.#tenantScopes(rt, orgId));
+    let stored = await rt.store.tenancy.getUser(userId);
+    if (profile) {
+      stored = { userId, ...profile, updatedAt: Date.now() };
+      await rt.store.tenancy.upsertUser(stored);
+    }
+    const memoKey = `${userId}${SEP}${stored?.email ?? ""}`;
+    const seen = ensureUserSeen.get(memoKey);
+    if (seen === undefined || Date.now() - seen >= ENSURE_USER_TTL_MS) {
+      await this.#syncDirectory(rt, userId);
+      // Invitations addressed to this email become memberships on sight.
+      if (stored?.email) {
+        for (const invite of await rt.store.tenancy.listInvitesForEmail(stored.email)) {
+          const claimed = await rt.store.tenancy.deleteInvite(invite.id);
+          if (!claimed) continue;
+          await this.#addMember(
+            rt,
+            invite.tenantId,
+            userId,
+            invite.roleId,
+            { kind: "admin", actorUserId: invite.invitedBy },
+            invite.invitedBy,
+          );
+          await this.#audit(rt, invite.tenantId, userId, "invite.claim", invite.id, { roleId: invite.roleId });
+        }
+      }
+      ensureUserSeen.set(memoKey, Date.now());
+    }
+    let tenants = await this.#tenantSummaries(rt, userId);
+    if (tenants.length === 0 && stored) {
+      // A new user gets a tenant by default; more can be created from the switcher. Never before the
+      // profile is known: the tenant is named after the person, and invitations are claimed by email.
+      const name = defaultTenantName({ displayName: stored.displayName, email: stored.email });
+      await this.#createTenantRows(rt, name, userId);
+      tenants = await this.#tenantSummaries(rt, userId);
+    }
+    return { user: stored, tenants };
+  }
+
+  async createTenant(input: { name: string; creatorUserId: string }): Promise<Tenant> {
+    const { name, creatorUserId } = parse(CreateTenantInputSchema, input);
+    const rt = await this.#runtime();
+    return this.#createTenantRows(rt, name, creatorUserId);
+  }
+
+  async findTenant(tenantId: string): Promise<Tenant | null> {
+    const rt = await this.#runtime();
+    return rt.store.tenancy.getTenant(parse(IdSchema, tenantId));
+  }
+
+  async #sweepMember(rt: AlfizRuntime, tenantId: string, userId: string, actor: string): Promise<number> {
+    const scopes = new Set(await this.#tenantScopes(rt, tenantId));
     const grants = (await rt.app.listGrants({ subject: userSubject(userId) })).filter((g) => scopes.has(g.scope));
     for (const g of grants) await rt.app.deleteGrant(g.id, { kind: "system", note: "membership removed" });
-    const user = await rt.store.alfiz.getUser(userId);
-    if (user && user.orgIds.includes(orgId)) {
-      await rt.app.importDirectory({ orgs: { [userId]: user.orgIds.filter((o) => o !== orgId) } }, "clerk");
-    }
-    for (const key of ensureUserSeen.keys())
-      if (key.startsWith(`${userId}${SEP}${orgId}${SEP}`)) ensureUserSeen.delete(key);
-    await this.#audit(rt, orgId, "system", "member.remove", userId, { deletedGrants: grants.length });
+    await rt.store.tenancy.deleteMembership(tenantId, userId);
+    await this.#syncDirectory(rt, userId);
+    for (const key of ensureUserSeen.keys()) if (key.startsWith(`${userId}${SEP}`)) ensureUserSeen.delete(key);
+    await this.#audit(rt, tenantId, actor, "member.remove", userId, { deletedGrants: grants.length });
+    return grants.length;
+  }
+
+  async forgetUser(userId: string): Promise<void> {
+    const id = parse(IdSchema, userId);
+    const rt = await this.#runtime();
+    for (const m of await rt.store.tenancy.listMemberships(id)) await this.#sweepMember(rt, m.tenantId, id, "system");
+    await rt.store.tenancy.deleteUser(id);
+    await rt.app.importDirectory({ users: [{ userId: id, active: false }] }, DIRECTORY_SOURCE);
   }
 
   async resolveScope(input: {
@@ -461,6 +519,95 @@ export class AuthService extends WorkerEntrypoint<AuthEnv> implements AuthServic
       projectDefaults: parsed.projectDefaults,
     });
     return this.#tenant(rt, c.tenantId);
+  }
+
+  async updateTenant(ctx: TenantCtx, input: unknown): Promise<Tenant> {
+    const { ctx: c, rt } = await this.#tenantCtx(ctx, "tpx.workspace.settings.update_settings", { fresh: true });
+    const parsed = parse(UpdateTenantInputSchema, input);
+    await this.#tenant(rt, c.tenantId);
+    await rt.store.tenancy.updateTenantName(c.tenantId, parsed.name);
+    await this.#audit(rt, c.tenantId, c.userId, "tenant.update", c.tenantId, { name: parsed.name });
+    return this.#tenant(rt, c.tenantId);
+  }
+
+  // -- members --------------------------------------------------------------------
+  async #memberView(rt: AlfizRuntime, tenantId: string, userId: string, joinedAt: number): Promise<Member> {
+    const [profile, grants] = await Promise.all([
+      rt.store.tenancy.getUser(userId),
+      rt.app.listGrants({ subject: userSubject(userId), scope: tenantScope(tenantId) }),
+    ]);
+    return {
+      userId,
+      email: profile?.email ?? null,
+      displayName: profile?.displayName ?? null,
+      imageUrl: profile?.imageUrl ?? null,
+      joinedAt,
+      roles: grants.flatMap((g) => (g.roleId ? [g.roleId] : [])),
+    };
+  }
+
+  async listMembers(ctx: TenantCtx): Promise<Member[]> {
+    const { ctx: c, rt } = await this.#tenantCtx(ctx, "tpx.workspace.members.read");
+    const rows = await rt.store.tenancy.listMembers(c.tenantId);
+    return Promise.all(rows.map((m) => this.#memberView(rt, c.tenantId, m.userId, m.joinedAt)));
+  }
+
+  async inviteMember(ctx: TenantCtx, input: unknown): Promise<InviteResult> {
+    const { ctx: c, rt } = await this.#tenantCtx(ctx, "tpx.workspace.members.manage_members", { fresh: true });
+    const parsed = parse(InviteMemberInputSchema, input);
+    if (!(await rt.app.listRoles()).some((r) => r.id === parsed.roleId)) {
+      throw new ValidationError(`unknown role ${JSON.stringify(parsed.roleId)}`);
+    }
+    const known = await rt.store.tenancy.getUserByEmail(parsed.email);
+    if (known) {
+      const members = await rt.store.tenancy.listMembers(c.tenantId);
+      if (members.some((m) => m.userId === known.userId)) throw new ConflictError("already a member");
+      await this.#addMember(rt, c.tenantId, known.userId, parsed.roleId, adminProvenance(c), c.userId);
+      return { kind: "added", member: await this.#memberView(rt, c.tenantId, known.userId, Date.now()) };
+    }
+    const invite: Invite = {
+      id: newId("inv"),
+      tenantId: c.tenantId,
+      email: parsed.email,
+      roleId: parsed.roleId,
+      invitedBy: c.userId,
+      createdAt: Date.now(),
+    };
+    const inserted = await rt.store.tenancy.insertInvite(invite);
+    if (!inserted) throw new ConflictError("an invitation for that address is already pending");
+    await this.#audit(rt, c.tenantId, c.userId, "invite.create", invite.id, {
+      email: invite.email,
+      roleId: invite.roleId,
+    });
+    return { kind: "invited", invite };
+  }
+
+  async listInvites(ctx: TenantCtx): Promise<Invite[]> {
+    const { ctx: c, rt } = await this.#tenantCtx(ctx, "tpx.workspace.members.read");
+    return rt.store.tenancy.listInvites(c.tenantId);
+  }
+
+  async revokeInvite(ctx: TenantCtx, inviteId: string): Promise<void> {
+    const { ctx: c, rt } = await this.#tenantCtx(ctx, "tpx.workspace.members.manage_members", { fresh: true });
+    const id = parse(IdSchema, inviteId);
+    const pending = (await rt.store.tenancy.listInvites(c.tenantId)).find((i) => i.id === id);
+    if (!pending) throw new NotFoundError("invitation not found");
+    await rt.store.tenancy.deleteInvite(id);
+    await this.#audit(rt, c.tenantId, c.userId, "invite.revoke", id, { email: pending.email });
+  }
+
+  async removeMember(ctx: TenantCtx, userId: string): Promise<void> {
+    const { ctx: c, rt } = await this.#tenantCtx(ctx, "tpx.workspace.members.manage_members", { fresh: true });
+    const id = parse(IdSchema, userId);
+    const members = await rt.store.tenancy.listMembers(c.tenantId);
+    if (!members.some((m) => m.userId === id)) throw new NotFoundError("not a member");
+    const owners = (await rt.app.listGrants({ scope: tenantScope(c.tenantId), roleId: ROLE_IDS.owner })).map(
+      (g) => g.subject,
+    );
+    if (owners.includes(userSubject(id)) && owners.every((s) => s === userSubject(id))) {
+      throw new ConflictError("a tenant must keep at least one owner");
+    }
+    await this.#sweepMember(rt, c.tenantId, id, c.userId);
   }
 
   // -- projects -------------------------------------------------------------------

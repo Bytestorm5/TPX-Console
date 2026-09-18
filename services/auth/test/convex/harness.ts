@@ -1,11 +1,8 @@
-/// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import schema from "../../convex/schema";
+import schema from "@tpx/convex/schema";
+import { modules } from "@tpx/convex/test-modules";
 import { convexStore } from "../../src/store/convex-store";
 import type { ConvexCaller } from "@tpx/convex-client";
-
-/** convex-test locates the functions root from the `_generated` entry in this map. */
-export const modules = import.meta.glob("../../convex/**/*.*s");
 
 export function freshStore() {
   const t = convexTest(schema, modules);

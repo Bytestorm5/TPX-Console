@@ -1,5 +1,5 @@
 /** Opaque, URL-safe ids with a type prefix: `prj_1f3a…`. */
-export function newId(prefix: "prj" | "env" | "aud"): string {
+export function newId(prefix: "tnt" | "prj" | "env" | "aud" | "inv"): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 22)}`;
 }
 

@@ -6,12 +6,13 @@ import {
   Layers,
   LayoutDashboard,
   ScrollText,
+  Settings2,
   Users,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
-import type { Environment, Project } from "@tpx/contracts/auth";
+import type { Environment, Project, TenantSummary } from "@tpx/contracts/auth";
 import { Badge, cn } from "@tpx/ui";
 import { activeItem, isGroupActive, type NavGroup, type NavItem } from "../nav.ts";
 import { products } from "../../registry.ts";
@@ -22,7 +23,9 @@ import { ThemeToggle } from "./ThemeToggle.tsx";
 
 export interface SidebarProps {
   mode: "clerk" | "fixture";
+  tenantId: string;
   tenantName: string;
+  tenants: TenantSummary[];
   user: { name: string | null; email: string | null };
   projects: Project[];
   project: Project | null;
@@ -50,7 +53,7 @@ export function Sidebar(props: SidebarProps) {
         <Wordmark />
       </div>
       <div className="space-y-2 px-4">
-        <TenantSwitcher mode={props.mode} tenantName={props.tenantName} />
+        <TenantSwitcher tenantId={props.tenantId} tenantName={props.tenantName} tenants={props.tenants} />
         <ScopeSwitcher
           projects={props.projects}
           project={props.project}
@@ -97,6 +100,7 @@ const WORKSPACE_ICONS: Record<string, LucideIcon> = {
   "/org/members": Users,
   "/org/access": KeyRound,
   "/org/audit": ScrollText,
+  "/org/settings": Settings2,
 };
 
 /** Icons come from the manifests (client-side), never through loader data. */

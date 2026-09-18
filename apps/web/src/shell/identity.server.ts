@@ -1,22 +1,22 @@
 /**
  * Ingress identity. tpx-web is the only place a session is validated: Clerk
- * verifies the session, this module turns it into a `SessionIdentity`.
+ * verifies the session, this module turns it into a `SessionIdentity` — who
+ * the user is, never which tenant they are in. Tenancy is tpx-auth's.
  *
  * In development with TPX_DEV_FIXTURE=1 a fixture identity stands in for
  * Clerk so the whole console runs without keys; the branch is guarded by
  * `import.meta.env.DEV` and does not exist in production builds.
  */
-import { clerkMiddleware, getAuth } from "@clerk/react-router/server";
+import { clerkClient, clerkMiddleware, getAuth } from "@clerk/react-router/server";
 import type { LoaderFunctionArgs, MiddlewareFunction } from "react-router";
 import { redirect } from "react-router";
+import type { ProfileInput } from "@tpx/contracts/auth";
 import type { SessionIdentity } from "@tpx/identity";
-import { cloudflareContext, identityContext, type SignedInIdentity, type TenantIdentity } from "./context.ts";
+import { cloudflareContext, identityContext, type SignedInIdentity } from "./context.ts";
 import { isFixtureMode, type WebEnv } from "./env.ts";
 
-export const FIXTURE_IDENTITY: TenantIdentity = {
+export const FIXTURE_IDENTITY: SignedInIdentity = {
   userId: "user_fixture",
-  orgId: "org_fixture",
-  orgRole: "org:admin",
   displayName: "Ada Fixture",
   email: "ada@example.test",
   imageUrl: null,
@@ -48,15 +48,7 @@ export async function getIdentity(
   const { env } = args.context.get(cloudflareContext);
   if (isFixtureMode(env)) return args.context.get(identityContext) ?? FIXTURE_IDENTITY;
   const auth = await getAuth(args as LoaderFunctionArgs);
-  if (!auth.userId) return { userId: "", orgId: null, orgRole: null, displayName: null, email: null, imageUrl: null };
-  return {
-    userId: auth.userId,
-    orgId: auth.orgId ?? null,
-    orgRole: auth.orgRole ?? null,
-    displayName: null,
-    email: null,
-    imageUrl: null,
-  };
+  return { userId: auth.userId ?? "", displayName: null, email: null, imageUrl: null };
 }
 
 /** Redirects to sign-in (remembering where the user was going) when there is no session. */
@@ -72,11 +64,19 @@ export async function requireSignedIn(
   return identity as SignedInIdentity;
 }
 
-/** A signed-in user with an active organization — the tenant. Otherwise: onboarding. */
-export async function requireTenantIdentity(
+/** The profile from the identity provider — fetched only when tpx-auth's copy is missing or stale. */
+export async function fetchProfile(
   args: Pick<LoaderFunctionArgs, "request" | "context" | "params">,
-): Promise<TenantIdentity> {
-  const identity = await requireSignedIn(args);
-  if (!identity.orgId) throw redirect("/onboarding");
-  return identity as TenantIdentity;
+  identity: SignedInIdentity,
+): Promise<ProfileInput> {
+  const { env } = args.context.get(cloudflareContext);
+  if (isFixtureMode(env)) {
+    return { email: identity.email, displayName: identity.displayName, imageUrl: identity.imageUrl };
+  }
+  const user = await clerkClient(args as LoaderFunctionArgs).users.getUser(identity.userId);
+  return {
+    email: user.primaryEmailAddress?.emailAddress ?? null,
+    displayName: user.fullName ?? user.firstName ?? user.username ?? null,
+    imageUrl: user.imageUrl ?? null,
+  };
 }

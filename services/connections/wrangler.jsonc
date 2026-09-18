@@ -5,7 +5,8 @@
   // binding from tpx-web (and, later, from product services): no routes, no
   // workers.dev hostname, no preview URLs.
   //
-  // Secrets: CONVEX_DEPLOY_KEY reaches the service's own Convex deployment;
+  // Secrets: CONVEX_DEPLOY_KEY reaches the console's single Convex deployment
+  // (packages/convex), of which this service touches only `connections_*`;
   // CONNECTIONS_MASTER_KEY (base64, 32 bytes) wraps every per-secret data key.
   // Rotate by moving the old value to CONNECTIONS_MASTER_KEY_PREVIOUS and
   // issuing a new CONNECTIONS_MASTER_KEY: old rows keep decrypting, new writes

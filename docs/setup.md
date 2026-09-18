@@ -2,20 +2,19 @@
 
 ## Clerk
 
-1. Create a Clerk application with **Organizations** enabled.
+1. Create a Clerk application. Organizations are **not** needed: Clerk only signs users in; tenants, membership and invitations are the console's own (tpx-auth on Alfiz).
 2. tpx-web needs `CLERK_PUBLISHABLE_KEY` (a var in `apps/web/wrangler.jsonc`, or the dashboard) and the secrets `CLERK_SECRET_KEY` and `CLERK_WEBHOOK_SIGNING_SECRET` (`wrangler secret put`, or `.dev.vars` locally — see `apps/web/.dev.vars.example`).
-3. Point a webhook at `https://<console>/webhooks/clerk` for `organizationMembership.*` events (the console also reconciles on every request, so the webhook only speeds removals up).
+3. Point a webhook at `https://<console>/webhooks/clerk` for the `user.deleted` event so a deleted account loses its memberships at once.
 
 ## Convex
 
-One deployment per service:
+One deployment for the whole console, defined in `packages/convex` (each service's functions in its own folder, its tables prefixed `auth_` / `connections_`):
 
 ```sh
-cd services/auth && npx convex dev          # creates the deployment, runs codegen
-cd services/connections && npx convex dev
+cd packages/convex && npx convex dev        # creates the deployment, pushes the schema and functions, runs codegen
 ```
 
-Then for each Worker set `CONVEX_URL` (var) and `CONVEX_DEPLOY_KEY` (secret). `services/*/convex/_generated` is committed so the repository typechecks without a deployment; `npx convex dev` regenerates it.
+Then give every Worker the same `CONVEX_URL` (var) and `CONVEX_DEPLOY_KEY` (secret). `packages/convex/convex/_generated` is committed so the repository typechecks without a deployment; `npx convex dev` regenerates it.
 
 ## Secrets
 

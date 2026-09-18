@@ -3,7 +3,7 @@
 ## Workers and bindings
 
 ```
-browser ──HTTPS──▶ tpx-web (apps/web)  ──service binding──▶ tpx-auth (services/auth)  ──HTTPS──▶ Convex deployment A
+browser ──HTTPS──▶ tpx-web (apps/web)  ──service binding──▶ tpx-auth (services/auth)  ──HTTPS──▶ Convex ◀──┐
                         │                                    (Alfiz root, tenancy)
                         └────────service binding──────────▶ tpx-connections (services/connections) ──HTTPS──▶ Convex deployment B
                                                              (secrets, providers, resolution, audit)
@@ -17,7 +17,7 @@ browser ──HTTPS──▶ tpx-web (apps/web)  ──service binding──▶ 
 ## Scope model
 
 ```
-Tenant (= Clerk organization)
+Tenant (tpx-auth's own; Clerk only authenticates)
 └── Project (slug)            /<project>
     └── Environment (name)    /<project>/<environment>/<product>/…
 ```
@@ -30,16 +30,20 @@ Tenant (= Clerk organization)
 
 `root.tsx` middleware: `identityMiddleware` (Clerk, or the fixture in dev) → the scoped layout's `scopeMiddleware`:
 
-1. `ensureUser` records the org membership and mirrors Clerk `org:admin` as a `tpx-admin` grant (provenance `clerk:org:admin`, so it is revoked when the Clerk role changes);
-2. `findTenant` / `ensureTenant` — the first visit from an organization creates the tenant, grants the creator `tpx-owner`, gives `org:<id>` `tpx-member`, and creates the `Default` project with the vocabulary defaults;
+1. `ensureUser` — tpx-auth records the user (profile cached from Clerk, refreshed hourly), claims any invitation addressed to their email, and, for a user who belongs to no tenant, creates "<First name>'s Org" with them as `tpx-owner`, `org:<tenantId>` as `tpx-member`, and a `Default` project. It returns the tenants they belong to.
+2. The active tenant is the one remembered in the `tpx_tenant` cookie if the user is a member of it, else the first membership. A cookie can never name a tenant the user is not in.
 3. `resolveScope` turns the URL into ids, or 404 (never revealing whether a project exists);
 4. an Alfiz `snapshot` of the user at the environment scope → `grantsAt` → `Ctx`.
 
+Membership is the console's own (`auth_memberships`) and is mirrored into Alfiz's directory as the user's org ids, which is what makes `org:<tenantId>` part of the user's closure and tenant-wide grants apply. Clerk organizations are not used.
+
 tpx-web is an Alfiz _client_ with a read-only provider seam over tpx-auth (`getSubjectAccess`, `resolveAncestors`, epoch revalidation). Services re-check `requireGrant(ctx, key)` on every method, and tpx-auth runs a **fresh** (uncached) `can` check before destructive or authority-changing writes.
 
-### Onboarding
+### Organizations, members, invitations
 
-A signed-in user without an organization lands on `/onboarding`, which creates `<First name>'s Org` through Clerk's Backend API and activates it; the first scoped request then bootstraps the tenant as above. Users can create more organizations from the tenant switcher (Clerk's `OrganizationSwitcher`).
+- The tenant switcher in the sidebar lists the user's memberships and links to `/org/new`, where any signed-in user creates another tenant and becomes its owner.
+- Members (`/org/members`) are invited by email with a seed role. A known user (one who has signed in before) joins at once; anyone else gets a pending invitation that is claimed on their first sign-in with that address. Removing a member sweeps every grant they hold inside the tenant; the last owner cannot be removed.
+- Clerk's only webhook of interest is `user.deleted`, which forgets the user everywhere.
 
 ## The shell and the products
 

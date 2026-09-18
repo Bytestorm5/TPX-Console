@@ -2,7 +2,7 @@ import { data, Outlet } from "react-router";
 import type { Route } from "./+types/scope";
 import { ErrorSection } from "../shell/components/ErrorSection.tsx";
 import { Frame } from "../shell/components/Frame.tsx";
-import { requireScope, scopeCookieHeader, scopeMiddleware } from "../shell/session.server.ts";
+import { requireScope, scopeCookieHeader, scopeMiddleware, tenantCookieHeader } from "../shell/session.server.ts";
 import { sidebarFor } from "../shell/shell.server.ts";
 
 /** The scoped shell: `/<project>/<environment>/…`. */
@@ -20,7 +20,12 @@ export async function loader(args: Route.LoaderArgs) {
       environment: session.environment,
       environments: session.environments,
     },
-    { headers: { "Set-Cookie": scopeCookieHeader(session.project.slug, session.environment.name) } },
+    {
+      headers: [
+        ["Set-Cookie", tenantCookieHeader(session.tenant.id)],
+        ["Set-Cookie", scopeCookieHeader(session.project.slug, session.environment.name)],
+      ],
+    },
   );
 }
 
