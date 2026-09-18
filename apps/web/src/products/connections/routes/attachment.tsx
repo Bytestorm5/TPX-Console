@@ -30,7 +30,7 @@ import type { Route } from "./+types/attachment";
 import { formatWhen, maskHint } from "~/lib/format.ts";
 import { formValues, prefixed } from "~/lib/forms.ts";
 import { cloudflareContext } from "~/shell/context.ts";
-import { attempt, rpc } from "~/shell/rpc.server.ts";
+import { attempt, call } from "~/shell/services.server.ts";
 import { assertGrant, requireScope } from "~/shell/session.server.ts";
 import { scopePath } from "~/shell/scope.ts";
 import {
@@ -48,21 +48,21 @@ export const meta: Route.MetaFunction = ({ loaderData }) => [
 ];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.attachments.read");
-  const attachments = await rpc(env.CONNECTIONS.listAttachments(session.ctx));
+  const attachments = await call(services.connections.listAttachments(session.ctx));
   const attachment = attachments.find((a) => a.id === args.params.attachmentId);
   if (!attachment) throw data({ error: "attachment not found" }, { status: 404 });
   const canBindings = hasGrant(session.ctx, "tpx.connections.bindings.read");
   const [connection, providers, binding, resolution] = await Promise.all([
     hasGrant(session.ctx, "tpx.connections.connections.read")
-      ? rpc(env.CONNECTIONS.getConnection(session.ctx, attachment.connectionId))
+      ? call(services.connections.getConnection(session.ctx, attachment.connectionId))
       : Promise.resolve(null),
-    rpc(env.CONNECTIONS.listProviders()),
-    canBindings ? rpc(env.CONNECTIONS.getBinding(session.ctx, attachment.id)) : Promise.resolve(null),
+    call(services.connections.listProviders()),
+    canBindings ? call(services.connections.getBinding(session.ctx, attachment.id)) : Promise.resolve(null),
     hasGrant(session.ctx, "tpx.connections.usage.read")
-      ? rpc(env.CONNECTIONS.resolve(session.ctx, attachment.capability, attachment.name))
+      ? call(services.connections.resolve(session.ctx, attachment.capability, attachment.name))
       : Promise.resolve(null),
   ]);
   const providerId = connection?.provider ?? resolution?.attachment?.provider ?? null;
@@ -98,7 +98,7 @@ const issues = (e: { issues: { path: PropertyKey[]; message: string }[] }) =>
   e.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   const id = args.params.attachmentId;
   const values = formValues(await args.request.formData());
@@ -110,14 +110,14 @@ export async function action(args: Route.ActionArgs) {
         credential: prefixed(values, "credential"),
       });
       if (!parsed.success) return fail(issues(parsed.error));
-      const result = await attempt(env.CONNECTIONS.updateAttachment(session.ctx, id, parsed.data));
+      const result = await attempt(services.connections.updateAttachment(session.ctx, id, parsed.data));
       return result.ok ? ({ ok: true, message: "Project override saved." } satisfies ActionResult) : result;
     }
     case "settings": {
       assertGrant(session.ctx, "tpx.connections.attachments.update_attachment");
       const parsed = UpdateAttachmentInputSchema.safeParse({ name: values.name, isDefault: values.isDefault === "on" });
       if (!parsed.success) return fail(issues(parsed.error));
-      const result = await attempt(env.CONNECTIONS.updateAttachment(session.ctx, id, parsed.data));
+      const result = await attempt(services.connections.updateAttachment(session.ctx, id, parsed.data));
       if (!result.ok) return result;
       throw redirect(
         scopePath(session.project.slug, session.environment.name, `connections/attachments/${result.value.id}`),
@@ -130,7 +130,7 @@ export async function action(args: Route.ActionArgs) {
         credential: prefixed(values, "credential"),
       });
       if (!parsed.success) return fail(issues(parsed.error));
-      const result = await attempt(env.CONNECTIONS.setBinding(session.ctx, id, parsed.data));
+      const result = await attempt(services.connections.setBinding(session.ctx, id, parsed.data));
       return result.ok
         ? ({ ok: true, message: `Override for ${session.environment.name} saved.` } satisfies ActionResult)
         : result;
@@ -140,18 +140,20 @@ export async function action(args: Route.ActionArgs) {
       const key = values.key ?? "";
       if (values.level === "binding") {
         assertGrant(session.ctx, "tpx.connections.bindings.update_binding");
-        const result = await attempt(env.CONNECTIONS.setBinding(session.ctx, id, { credential: { [key]: "" } }));
+        const result = await attempt(services.connections.setBinding(session.ctx, id, { credential: { [key]: "" } }));
         return result.ok
           ? ({ ok: true, message: `Cleared ${key} for ${session.environment.name}.` } satisfies ActionResult)
           : result;
       }
       assertGrant(session.ctx, "tpx.connections.attachments.update_attachment");
-      const result = await attempt(env.CONNECTIONS.updateAttachment(session.ctx, id, { credential: { [key]: "" } }));
+      const result = await attempt(
+        services.connections.updateAttachment(session.ctx, id, { credential: { [key]: "" } }),
+      );
       return result.ok ? ({ ok: true, message: `Cleared ${key} for the project.` } satisfies ActionResult) : result;
     }
     case "clear-binding": {
       assertGrant(session.ctx, "tpx.connections.bindings.clear_binding");
-      const result = await attempt(env.CONNECTIONS.clearBinding(session.ctx, id));
+      const result = await attempt(services.connections.clearBinding(session.ctx, id));
       return result.ok
         ? ({ ok: true, message: `Every override for ${session.environment.name} cleared.` } satisfies ActionResult)
         : result;
@@ -162,19 +164,19 @@ export async function action(args: Route.ActionArgs) {
         values.level === "binding"
           ? { level: "binding", attachmentId: id, environmentId: session.ctx.environmentId }
           : { level: "attachment", attachmentId: id };
-      const result = await attempt(env.CONNECTIONS.revealSecret(session.ctx, locator, values.key ?? ""));
+      const result = await attempt(services.connections.revealSecret(session.ctx, locator, values.key ?? ""));
       if (!result.ok) return result;
       return data<ActionResult>({ ok: true, revealed: result.value }, { headers: { "Cache-Control": "no-store" } });
     }
     case "plan": {
       assertGrant(session.ctx, "tpx.connections.bindings.promote_binding");
-      const result = await attempt(env.CONNECTIONS.planPromotion(session.ctx, id, values.toEnvironmentId ?? ""));
+      const result = await attempt(services.connections.planPromotion(session.ctx, id, values.toEnvironmentId ?? ""));
       return result.ok ? ({ ok: true, plan: result.value } satisfies ActionResult) : result;
     }
     case "promote": {
       assertGrant(session.ctx, "tpx.connections.bindings.promote_binding");
       const result = await attempt(
-        env.CONNECTIONS.promote(session.ctx, {
+        services.connections.promote(session.ctx, {
           attachmentId: id,
           toEnvironmentId: values.toEnvironmentId ?? "",
           digest: values.digest ?? "",
@@ -184,7 +186,7 @@ export async function action(args: Route.ActionArgs) {
     }
     case "detach": {
       assertGrant(session.ctx, "tpx.connections.attachments.detach_connection");
-      const result = await attempt(env.CONNECTIONS.detachConnection(session.ctx, id));
+      const result = await attempt(services.connections.detachConnection(session.ctx, id));
       if (!result.ok) return result;
       throw redirect(scopePath(session.project.slug, session.environment.name, "connections/attachments"));
     }

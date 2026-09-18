@@ -4,7 +4,7 @@ import { hasGrant } from "@tpx/identity";
 import { Badge, Button, Card, CardHeader, Field, Input, PageHeader } from "@tpx/ui";
 import type { Route } from "./+types/environments";
 import { cloudflareContext } from "../../shell/context.ts";
-import { attempt } from "../../shell/rpc.server.ts";
+import { attempt } from "../../shell/services.server.ts";
 import { requireTenant } from "../../shell/session.server.ts";
 import { formValues } from "../../lib/forms.ts";
 
@@ -19,7 +19,7 @@ export function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   const values = formValues(await args.request.formData());
   const split = (v: string | undefined) =>
@@ -32,7 +32,7 @@ export async function action(args: Route.ActionArgs) {
     projectDefaults: split(values.projectDefaults),
   });
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
-  return attempt(env.AUTH.updateTenantEnvironments(session.tenantCtx, parsed.data));
+  return attempt(services.auth.updateTenantEnvironments(session.tenantCtx, parsed.data));
 }
 
 export default function Environments({ loaderData, actionData }: Route.ComponentProps) {

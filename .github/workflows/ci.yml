@@ -24,14 +24,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Boundary rules (no cross-product / service-to-service imports)
         run: pnpm check:boundaries
-      - name: No public routes on service Workers
-        run: pnpm check:service-routes
+      - name: One Worker (a single wrangler config, no service bindings)
+        run: pnpm check:topology
       - name: Generate Worker types
-        run: pnpm -r --workspace-concurrency=1 typegen
+        run: pnpm --filter @tpx/web typegen
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
       - name: Build web
         run: pnpm --filter @tpx/web build
-      - name: Dry-run deploys (validates every wrangler.jsonc)
-        run: pnpm -r --workspace-concurrency=1 deploy:dry-run
+      - name: Dry-run deploy (validates wrangler.jsonc)
+        run: pnpm --filter @tpx/web deploy:dry-run

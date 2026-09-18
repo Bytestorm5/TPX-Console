@@ -1,10 +1,11 @@
-import { createExecutionContext } from "cloudflare:test";
-import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { environmentScope, grantsAt, projectScope, tenantScope, ROLE_IDS, decodeRpcError } from "@tpx/identity";
-import { CTX_HEADER, encodeCtxHeader, type Ctx, type TenantCtx } from "@tpx/contracts/scope";
+import { environmentScope, grantsAt, projectScope, tenantScope, ROLE_IDS, isTpxError } from "@tpx/identity";
+import type { Ctx, TenantCtx } from "@tpx/contracts/scope";
 import { AuthService, __setStoreForTests, getAlfiz, memoryStore, type AuthEnv } from "../../src/index.ts";
 import type { AuthStore } from "../../src/store/types.ts";
+
+/** Never reached: every test overrides the store with an in-memory one. */
+const TEST_ENV: AuthEnv = { CONVEX_URL: "https://test.invalid", CONVEX_DEPLOY_KEY: "test" };
 
 let store: AuthStore;
 let service: AuthService;
@@ -12,7 +13,7 @@ let service: AuthService;
 beforeEach(() => {
   store = memoryStore();
   __setStoreForTests(store);
-  service = new AuthService(createExecutionContext(), env as unknown as AuthEnv);
+  service = new AuthService(TEST_ENV);
 });
 
 async function tenantCtx(userId: string, tenantId: string): Promise<TenantCtx> {
@@ -41,8 +42,7 @@ async function status(promise: Promise<unknown>): Promise<number | null> {
     await promise;
     return null;
   } catch (e) {
-    const err = decodeRpcError(e) as { status?: number };
-    return err.status ?? -1;
+    return isTpxError(e) ? e.status : -1;
   }
 }
 
@@ -319,19 +319,10 @@ describe("grants", () => {
     expect("events" in since && since.events.length).toBeGreaterThan(0);
     expect(await status(service.getSubjectAccess({ nope: 1 } as never))).toBe(400);
   });
-
-  it("answers health over fetch and nothing else without a context", async () => {
-    const ok = await service.fetch(new Request("https://tpx-auth/healthz"));
-    expect(ok.status).toBe(200);
-    expect((await service.fetch(new Request("https://tpx-auth/anything"))).status).toBe(401);
-    expect(
-      (await service.fetch(new Request("https://tpx-auth/anything", { headers: { "x-tpx-ctx": "garbage" } }))).status,
-    ).toBe(401);
-  });
 });
 
-describe("http surface (behind the tpx-web forwarder)", () => {
-  it("echoes the delivered context on /whoami and refuses requests without one", async () => {
+describe("json surface (behind the shell's /api/workspace forwarder)", () => {
+  it("echoes the resolved context on /whoami and knows nothing else", async () => {
     const ctx: Ctx = {
       tenantId: "tnt_a",
       projectId: "prj",
@@ -340,12 +331,15 @@ describe("http surface (behind the tpx-web forwarder)", () => {
       userId: "ada",
       grants: ["tpx.workspace.projects.read"],
     };
-    const ok = await service.fetch(
-      new Request("https://auth.internal/whoami", { headers: { [CTX_HEADER]: encodeCtxHeader(ctx) } }),
-    );
+    const ok = await service.handle(ctx, new Request("https://workspace.internal/whoami"));
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual(ctx);
-    expect((await service.fetch(new Request("https://auth.internal/whoami"))).status).toBe(401);
-    expect((await service.fetch(new Request("https://auth.internal/healthz"))).status).toBe(200);
+    expect((await service.handle(ctx, new Request("https://workspace.internal/anything"))).status).toBe(404);
+    expect(
+      (await service.handle(ctx, new Request("https://workspace.internal/whoami", { method: "POST" }))).status,
+    ).toBe(404);
+    await expect(
+      service.handle({ nope: 1 } as never, new Request("https://workspace.internal/whoami")),
+    ).rejects.toThrow();
   });
 });

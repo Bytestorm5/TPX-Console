@@ -6,7 +6,7 @@ import { Badge, Button, Card, CardHeader, Field, Input, PageHeader, buttonClasse
 import type { Route } from "./+types/marketplace";
 import { formValues, prefixed } from "~/lib/forms.ts";
 import { cloudflareContext } from "~/shell/context.ts";
-import { attempt, rpc } from "~/shell/rpc.server.ts";
+import { attempt, call } from "~/shell/services.server.ts";
 import { assertGrant, requireScope } from "~/shell/session.server.ts";
 import { scopePath } from "~/shell/scope.ts";
 import { ActionNotice, ConfigInputs, CredentialInputs, ProviderIcon } from "../lib.tsx";
@@ -14,10 +14,10 @@ import { ActionNotice, ConfigInputs, CredentialInputs, ProviderIcon } from "../l
 export const meta: Route.MetaFunction = () => [{ title: "Marketplace · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.marketplace.read");
-  const providers = await rpc(env.CONNECTIONS.listProviders());
+  const providers = await call(services.connections.listProviders());
   const wanted = new URL(args.request.url).searchParams.get("provider");
   const selected = providers.find((p) => p.id === wanted) ?? null;
   return {
@@ -30,7 +30,7 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.marketplace.create_connection");
   const values = formValues(await args.request.formData());
@@ -47,7 +47,7 @@ export async function action(args: Route.ActionArgs) {
       ok: false as const,
       error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
     };
-  const result = await attempt(env.CONNECTIONS.createConnection(session.ctx, parsed.data));
+  const result = await attempt(services.connections.createConnection(session.ctx, parsed.data));
   if (!result.ok) return result;
   throw redirect(scopePath(session.project.slug, session.environment.name, `connections/c/${result.value.id}`));
 }

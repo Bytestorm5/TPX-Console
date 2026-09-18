@@ -5,7 +5,7 @@ import { Button, Field, Input, buttonClasses } from "@tpx/ui";
 import type { Route } from "./+types/new";
 import { AuthPanel } from "../../shell/components/AuthPanel.tsx";
 import { cloudflareContext } from "../../shell/context.ts";
-import { attempt } from "../../shell/rpc.server.ts";
+import { attempt } from "../../shell/services.server.ts";
 import { clearScopeCookieHeader, resolveTenantSession, tenantCookieHeader } from "../../shell/session.server.ts";
 import { formValues } from "../../lib/forms.ts";
 
@@ -18,12 +18,12 @@ export async function loader(args: Route.LoaderArgs) {
 
 /** Any signed-in user may create another tenant; they become its owner and land in it. */
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = await resolveTenantSession(args);
   const parsed = CreateTenantInputSchema.safeParse(formValues(await args.request.formData()));
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
   const result = await attempt(
-    env.AUTH.createTenant({ name: parsed.data.name, creatorUserId: session.identity.userId }),
+    services.auth.createTenant({ name: parsed.data.name, creatorUserId: session.identity.userId }),
   );
   if (!result.ok) return result;
   throw redirect("/", {

@@ -1,14 +1,12 @@
-import type { AuthServiceContract } from "@tpx/contracts/auth";
-import type { ConnectionsServiceContract } from "@tpx/contracts/connections";
+import type { AuthEnv } from "@tpx/auth-service";
+import type { ConnectionsEnv } from "@tpx/connections-service";
 
 /**
- * The bindings tpx-web holds. Service bindings are typed by their contracts;
- * `wrangler types` sees them as plain Fetchers because the services live in
- * other packages.
+ * The Worker's env: the vars and secrets `wrangler.jsonc` declares. Every
+ * service reads its own slice (`AuthEnv`, `ConnectionsEnv`) of this one
+ * object — one Worker, one env.
  */
-export interface WebEnv {
-  AUTH: Fetcher & AuthServiceContract;
-  CONNECTIONS: Fetcher & ConnectionsServiceContract;
+export interface WebEnv extends AuthEnv, ConnectionsEnv {
   CLERK_PUBLISHABLE_KEY?: string;
   CLERK_SECRET_KEY?: string;
   CLERK_WEBHOOK_SIGNING_SECRET?: string;

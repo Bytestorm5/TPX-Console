@@ -1,18 +1,19 @@
 /**
- * The read-only Alfiz provider tpx-web attaches its client to. Closure supply
- * and ancestry come from tpx-auth over the service binding; every write is
- * refused, because writes go through the AuthService's own audited methods.
+ * The read-only Alfiz provider the shell attaches its client to. Closure
+ * supply and ancestry come from the auth service through the seam (an
+ * in-process call in the console Worker); every write is refused, because
+ * writes go through the AuthService's own audited methods.
  *
- * Runtime checks still never leave tpx-web: the client evaluates locally over
- * the closure data this provider fetches, and caches it with epoch
- * revalidation against tpx-auth's persisted event log.
+ * The client evaluates checks locally over the closure data this provider
+ * fetches, and caches it with epoch revalidation against the auth service's
+ * persisted event log.
  */
 import { AlfizProviderBase, ProviderWriteRejectedError, createAlfizClient } from "@alfiz/core";
 import type { AncestryResolver, EpochSource, PrincipalRef, ProviderCapabilities, SubjectAccessData } from "@alfiz/core";
 import type { AuthProviderSeam } from "@tpx/contracts/auth";
 import { catalog as tpxCatalog, type TpxClient } from "./catalog.ts";
 
-const READ_ONLY = "tpx-web holds a read-only view of tpx-auth; writes go through the AuthService RPC";
+const READ_ONLY = "the shell holds a read-only view of the auth service; writes go through AuthService's own methods";
 
 export class RemoteAuthProvider extends AlfizProviderBase {
   override readonly resolveAncestors: AncestryResolver;
@@ -158,7 +159,7 @@ export interface TpxClientOptions {
   strict?: boolean;
 }
 
-/** A catalog-typed Alfiz client over the remote seam — one per isolate in tpx-web. */
+/** A catalog-typed Alfiz client over the seam — one per isolate in the shell. */
 export function createTpxClient(seam: AuthProviderSeam, options: TpxClientOptions = {}): TpxClient {
   return createAlfizClient({
     catalog: tpxCatalog,

@@ -1,5 +1,5 @@
 /**
- * tpx-connections' store seam as Convex internal functions. Rows in, rows
+ * The connections service's store seam as Convex internal functions. Rows in, rows
  * out; cascades are transactional because a mutation is one transaction.
  */
 import { v } from "convex/values";

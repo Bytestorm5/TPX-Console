@@ -21,7 +21,7 @@ import {
 } from "@tpx/ui";
 import type { Route } from "./+types/members";
 import { cloudflareContext } from "../../shell/context.ts";
-import { attempt, rpc } from "../../shell/rpc.server.ts";
+import { attempt, call } from "../../shell/services.server.ts";
 import { assertGrant, requireTenant } from "../../shell/session.server.ts";
 import { formValues } from "../../lib/forms.ts";
 import { formatWhen } from "../../lib/format.ts";
@@ -29,13 +29,13 @@ import { formatWhen } from "../../lib/format.ts";
 export const meta: Route.MetaFunction = () => [{ title: "Members · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   assertGrant(session.tenantCtx, "tpx.workspace.members.read");
   const [members, invites, roles] = await Promise.all([
-    rpc(env.AUTH.listMembers(session.tenantCtx)),
-    rpc(env.AUTH.listInvites(session.tenantCtx)),
-    rpc(env.AUTH.listRoles()),
+    call(services.auth.listMembers(session.tenantCtx)),
+    call(services.auth.listInvites(session.tenantCtx)),
+    call(services.auth.listRoles()),
   ]);
   return {
     members,
@@ -48,7 +48,7 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   assertGrant(session.tenantCtx, "tpx.workspace.members.manage_members");
   const values = formValues(await args.request.formData());
@@ -56,7 +56,7 @@ export async function action(args: Route.ActionArgs) {
     case "invite": {
       const parsed = InviteMemberInputSchema.safeParse({ email: values.email, roleId: values.roleId });
       if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
-      const result = await attempt(env.AUTH.inviteMember(session.tenantCtx, parsed.data));
+      const result = await attempt(services.auth.inviteMember(session.tenantCtx, parsed.data));
       if (!result.ok) return result;
       return {
         ok: true as const,
@@ -67,11 +67,11 @@ export async function action(args: Route.ActionArgs) {
       };
     }
     case "revoke": {
-      const result = await attempt(env.AUTH.revokeInvite(session.tenantCtx, values.inviteId ?? ""));
+      const result = await attempt(services.auth.revokeInvite(session.tenantCtx, values.inviteId ?? ""));
       return result.ok ? { ok: true as const, message: "Invitation revoked." } : result;
     }
     case "remove": {
-      const result = await attempt(env.AUTH.removeMember(session.tenantCtx, values.userId ?? ""));
+      const result = await attempt(services.auth.removeMember(session.tenantCtx, values.userId ?? ""));
       return result.ok ? { ok: true as const, message: "Member removed." } : result;
     }
     default:

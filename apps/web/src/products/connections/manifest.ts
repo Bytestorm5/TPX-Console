@@ -3,14 +3,14 @@ import type { ProductManifest } from "~/shell/manifest.ts";
 
 /**
  * Connections: credentials, connectors and the capability contracts every
- * other product builds on. Served by the tpx-connections Worker.
+ * other product builds on. Served by the connections service.
  */
 const manifest: ProductManifest = {
   id: "connections",
   title: "Connections",
   description: "Credentials, connectors and the capability contracts products build on.",
   icon: Plug,
-  binding: "CONNECTIONS",
+  service: "connections",
   requires: "tpx.connections.*",
   nav: [
     { path: "connections", label: "Connected", icon: Cable, requires: "tpx.connections.connections.read" },

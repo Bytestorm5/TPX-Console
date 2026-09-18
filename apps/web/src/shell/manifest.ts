@@ -18,13 +18,16 @@ export interface NavEntry {
   requiresFeature?: string;
 }
 
+/** The services the Worker mounts (see `services.server.ts`), by the name a manifest uses. */
+export type ServiceId = "auth" | "connections";
+
 export interface ProductManifest {
   id: ProductId;
   title: string;
   description: string;
   icon: LucideIcon;
-  /** The env binding that serves this product, when it exists. */
-  binding?: "AUTH" | "CONNECTIONS";
+  /** The mounted service that serves this product, when it exists. */
+  service?: ServiceId;
   /** Visibility: the product renders only if the user holds anything under this pattern. */
   requires: TpxPattern;
   nav: readonly NavEntry[];

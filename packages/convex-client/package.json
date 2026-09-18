@@ -2,7 +2,7 @@
   "name": "@tpx/convex-client",
   "version": "0.1.0",
   "private": true,
-  "description": "A minimal, typed client for Convex's documented HTTP API, used by every service Worker to reach its own Convex deployment with a deploy key.",
+  "description": "A minimal, typed client for Convex's documented HTTP API, used by every service in the console Worker to reach the Convex deployment with the deploy key.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

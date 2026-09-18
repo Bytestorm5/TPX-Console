@@ -2,7 +2,7 @@
   "name": "@tpx/identity",
   "version": "0.1.0",
   "private": true,
-  "description": "The console's Alfiz catalog, scope helpers, seed roles, grant evaluation and the read-only remote provider tpx-web attaches to tpx-auth with.",
+  "description": "The console's Alfiz catalog, scope helpers, seed roles, grant evaluation and the read-only provider the shell attaches to the auth service with.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

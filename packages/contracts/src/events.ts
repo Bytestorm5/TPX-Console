@@ -1,7 +1,7 @@
 /**
- * The event bus. Queue names and event schemas live here, beside the RPC
- * types, so the producer and every consumer type-check against the same
- * definition. Products do not call each other by binding; cross-product
+ * The event bus. Queue names and event schemas live here, beside the service
+ * interfaces, so the producer and every consumer type-check against the same
+ * definition. Products do not call each other directly; cross-product
  * effects are events on these queues.
  */
 import { z } from "zod";

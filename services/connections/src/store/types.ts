@@ -1,5 +1,5 @@
 /**
- * The store seam of tpx-connections. Rows only; the service interprets.
+ * The store seam of the connections service. Rows only; the service interprets.
  * `secrets` rows are ciphertext envelopes — the store never sees plaintext.
  */
 export type OwnerKind = "connection-base" | "connection-environment" | "attachment" | "binding";

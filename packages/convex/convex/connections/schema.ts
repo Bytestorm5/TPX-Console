@@ -1,8 +1,8 @@
 /**
- * tpx-connections' tables (prefix `connections_`). Every table carries
- * tenantId; project- and environment-shaped rows carry those ids too. The
- * secrets table holds ciphertext only: the Worker encrypts before writing and
- * decrypts after reading, and Convex never sees a plaintext credential.
+ * The connections service's tables (prefix `connections_`). Every table
+ * carries tenantId; project- and environment-shaped rows carry those ids too.
+ * The secrets table holds ciphertext only: the service encrypts before writing
+ * and decrypts after reading, and Convex never sees a plaintext credential.
  */
 import { defineTable } from "convex/server";
 import { v } from "convex/values";

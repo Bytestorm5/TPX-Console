@@ -20,16 +20,16 @@ import {
 } from "@tpx/ui";
 import type { Route } from "./+types/projects";
 import { cloudflareContext } from "../../shell/context.ts";
-import { attempt, rpc } from "../../shell/rpc.server.ts";
+import { attempt, call } from "../../shell/services.server.ts";
 import { requireTenant } from "../../shell/session.server.ts";
 import { formValues } from "../../lib/forms.ts";
 
 export const meta: Route.MetaFunction = () => [{ title: "Projects · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
-  const projects = await rpc(env.AUTH.listProjects(session.tenantCtx));
+  const projects = await call(services.auth.listProjects(session.tenantCtx));
   return {
     projects,
     tenant: session.tenant,
@@ -38,7 +38,7 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   const values = formValues(await args.request.formData());
   const parsed = CreateProjectInputSchema.safeParse({
@@ -47,7 +47,7 @@ export async function action(args: Route.ActionArgs) {
     environments: session.tenant.environments.filter((e) => values[`env:${e}`] === "on"),
   });
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
-  return attempt(env.AUTH.createProject(session.tenantCtx, parsed.data));
+  return attempt(services.auth.createProject(session.tenantCtx, parsed.data));
 }
 
 export default function Projects({ loaderData, actionData }: Route.ComponentProps) {

@@ -1,16 +1,16 @@
 import { Card, CardHeader, EmptyState, PageHeader, TBody, TD, TH, THead, TR, Table } from "@tpx/ui";
 import type { Route } from "./+types/audit";
 import { cloudflareContext } from "../../shell/context.ts";
-import { rpc } from "../../shell/rpc.server.ts";
+import { call } from "../../shell/services.server.ts";
 import { requireTenant } from "../../shell/session.server.ts";
 import { formatWhen } from "../../lib/format.ts";
 
 export const meta: Route.MetaFunction = () => [{ title: "Audit · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
-  return { tenant: session.tenant, entries: await rpc(env.AUTH.listAudit(session.tenantCtx, { limit: 200 })) };
+  return { tenant: session.tenant, entries: await call(services.auth.listAudit(session.tenantCtx, { limit: 200 })) };
 }
 
 export default function Audit({ loaderData }: Route.ComponentProps) {

@@ -7,7 +7,7 @@ import { cloudflareContext } from "../shell/context.ts";
  * a deleted user: their memberships, grants and profile go with them.
  */
 export async function action({ request, context }: Route.ActionArgs) {
-  const { env } = context.get(cloudflareContext);
+  const { env, services } = context.get(cloudflareContext);
   if (!env.CLERK_WEBHOOK_SIGNING_SECRET) return new Response("webhook signing secret not configured", { status: 503 });
   let event;
   try {
@@ -18,7 +18,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
   if (event.type === "user.deleted") {
     const data = event.data as { id?: string; deleted?: boolean };
-    if (data.id) await env.AUTH.forgetUser(data.id);
+    if (data.id) await services.auth.forgetUser(data.id);
   }
   return Response.json({ ok: true });
 }

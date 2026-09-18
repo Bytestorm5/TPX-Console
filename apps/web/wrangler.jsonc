@@ -1,9 +1,20 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // tpx-web — the only public Worker: assets, SSR, the API forwarder, and a
-  // service binding to every backend service. The topology (routes, bindings)
-  // is committed here; plain vars and secrets live in the dashboard with
-  // keep_vars so a deploy never removes them.
+  // tpx-web — the console's one Worker: assets, SSR, the /api forwarder, and
+  // every service (services/*) mounted in-process. The topology is committed
+  // here; plain vars and secrets live in the dashboard with keep_vars so a
+  // deploy never removes them. scripts/check-topology.mjs fails CI if a
+  // second Worker config or a service binding ever appears.
+  //
+  // Storage is the console's single Convex deployment (packages/convex):
+  // CONVEX_URL is a plain var, CONVEX_DEPLOY_KEY a secret, and every service
+  // reads the same pair (the auth service touches only `auth_*` tables, the
+  // connections service only `connections_*`). CONNECTIONS_MASTER_KEY
+  // (base64, 32 bytes) wraps every per-secret data key in the connections
+  // service; rotate by moving the old value to CONNECTIONS_MASTER_KEY_PREVIOUS
+  // and issuing a new CONNECTIONS_MASTER_KEY — old rows keep decrypting, new
+  // writes use the new key, and re-saving a secret migrates it. Secrets are
+  // set in the dashboard or with `wrangler secret put`, never committed.
   "name": "tpx-web",
   "main": "./workers/app.ts",
   "compatibility_date": "2026-09-01",
@@ -19,14 +30,11 @@
     "CLERK_PUBLISHABLE_KEY": "pk_test_REPLACE_ME",
     // Products without a service yet, shown as "preview" so their nav group exists.
     "TPX_PREVIEW_PRODUCTS": "",
+    "CONVEX_URL": "https://REPLACE-ME.convex.cloud",
   },
   "secrets": {
-    "required": ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET"],
+    "required": ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET", "CONVEX_DEPLOY_KEY", "CONNECTIONS_MASTER_KEY"],
   },
-  "services": [
-    { "binding": "AUTH", "service": "tpx-auth" },
-    { "binding": "CONNECTIONS", "service": "tpx-connections" },
-  ],
   "env": {
     "staging": {
       "name": "tpx-web-staging",
@@ -37,12 +45,11 @@
       "vars": {
         "CLERK_PUBLISHABLE_KEY": "pk_test_REPLACE_ME",
         "TPX_PREVIEW_PRODUCTS": "operator,dispatcher,integrator",
+        "CONVEX_URL": "https://REPLACE-ME-staging.convex.cloud",
       },
-      "secrets": { "required": ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET"] },
-      "services": [
-        { "binding": "AUTH", "service": "tpx-auth-staging" },
-        { "binding": "CONNECTIONS", "service": "tpx-connections-staging" },
-      ],
+      "secrets": {
+        "required": ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SIGNING_SECRET", "CONVEX_DEPLOY_KEY", "CONNECTIONS_MASTER_KEY"],
+      },
     },
   },
 }

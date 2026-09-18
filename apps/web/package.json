@@ -2,7 +2,7 @@
   "name": "@tpx/web",
   "version": "0.1.0",
   "private": true,
-  "description": "tpx-web: the console — the only public Worker. Assets, SSR, the API forwarder, every service binding.",
+  "description": "tpx-web: the console — the one Worker. Assets, SSR, the API forwarder, every service mounted in-process.",
   "type": "module",
   "scripts": {
     "dev": "react-router dev",
@@ -18,6 +18,8 @@
   "dependencies": {
     "@alfiz/core": "0.8.1",
     "@clerk/react-router": "3.6.24",
+    "@tpx/auth-service": "workspace:*",
+    "@tpx/connections-service": "workspace:*",
     "@tpx/contracts": "workspace:*",
     "@tpx/identity": "workspace:*",
     "@tpx/tokens": "workspace:*",

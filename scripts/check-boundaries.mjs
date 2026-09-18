@@ -5,8 +5,11 @@
 //      own files, `~/shell/**`, `~/lib/**`, `@tpx/ui`, `@tpx/tokens`,
 //      `@tpx/identity`, `@tpx/contracts` and `@tpx/contracts/<p>`. Never
 //      another product, never a service.
-//   2. No service-to-service imports. `services/<s>/**` may not import from
-//      another service or from `apps/`. Shared logic goes to `packages/`.
+//   2. No service-to-service imports, and no Worker entrypoints. `services/<s>/**`
+//      may not import from another service, from `apps/`, or from
+//      `cloudflare:workers`: a service is a library the Worker entry
+//      constructs with its env, never an entrypoint of its own. Shared logic
+//      goes to `packages/`.
 //
 // Import specifiers are read syntactically (import/export ... from "x",
 // dynamic import("x")); this is deliberately dependency-free so it runs in CI
@@ -116,6 +119,9 @@ for (const service of serviceNames) {
       if (spec === "@tpx/web" || spec.startsWith("@tpx/web/")) failures.push(`${label}: service imports the web app`);
       if (/^@tpx\/(auth|connections|operator|dispatcher|integrator)-service/.test(spec)) {
         failures.push(`${label}: service-to-service import`);
+      }
+      if (spec === "cloudflare:workers") {
+        failures.push(`${label}: a service is a library, not a Worker entrypoint (it is constructed with its env)`);
       }
     }
   }

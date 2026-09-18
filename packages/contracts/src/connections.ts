@@ -1,6 +1,6 @@
 /**
- * tpx-connections — credentials, connector implementations, capability
- * contracts, scope resolution, and the audit log.
+ * The connections service — credentials, connector implementations,
+ * capability contracts, scope resolution, and the audit log.
  *
  * A connection is three objects, not one:
  *   Connection  (tenant)                 provider, capabilities, base credential/config,
@@ -259,9 +259,10 @@ export const ExecuteResultSchema = z.object({
 export type ExecuteResult = z.infer<typeof ExecuteResultSchema>;
 
 /**
- * The RPC surface of the tpx-connections Worker. Tenant-level objects take a
- * `TenantCtx`; anything project- or environment-shaped takes the full `Ctx`.
- * Products never name a connection: they ask for a capability within a scope.
+ * The connections service's interface (`services/connections`), what the
+ * shell calls in-process. Tenant-level objects take a `TenantCtx`; anything
+ * project- or environment-shaped takes the full `Ctx`. Products never name a
+ * connection: they ask for a capability within a scope.
  */
 export interface ConnectionsServiceContract {
   capabilities(): Promise<ProductCapabilities>;

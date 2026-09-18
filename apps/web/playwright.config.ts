@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * End-to-end against the real topology in workerd: tpx-web plus both service
- * Workers, in fixture mode (a fixture identity instead of Clerk, in-memory
- * stores instead of Convex). Nothing external is needed.
+ * End-to-end against the real Worker in workerd — the console with every
+ * service mounted in-process — in fixture mode (a fixture identity instead
+ * of Clerk, in-memory stores instead of Convex). Nothing external is needed.
  */
 const port = Number(process.env.TPX_E2E_PORT ?? 5199);
 

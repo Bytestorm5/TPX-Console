@@ -32,7 +32,7 @@ import type { Route } from "./+types/connection";
 import { formatWhen } from "~/lib/format.ts";
 import { formValues, prefixed } from "~/lib/forms.ts";
 import { cloudflareContext } from "~/shell/context.ts";
-import { attempt, rpc } from "~/shell/rpc.server.ts";
+import { attempt, call } from "~/shell/services.server.ts";
 import { assertGrant, requireScope } from "~/shell/session.server.ts";
 import { scopePath } from "~/shell/scope.ts";
 import {
@@ -55,14 +55,14 @@ function levelParam(raw: string | null, vocabulary: readonly string[]): string {
 }
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.connections.read");
   const [connection, providers, attachments] = await Promise.all([
-    rpc(env.CONNECTIONS.getConnection(session.ctx, args.params.connectionId)),
-    rpc(env.CONNECTIONS.listProviders()),
+    call(services.connections.getConnection(session.ctx, args.params.connectionId)),
+    call(services.connections.listProviders()),
     hasGrant(session.ctx, "tpx.connections.attachments.read")
-      ? rpc(env.CONNECTIONS.listAttachments(session.ctx))
+      ? call(services.connections.listAttachments(session.ctx))
       : Promise.resolve([]),
   ]);
   const provider = providers.find((p) => p.id === connection.provider);
@@ -97,7 +97,7 @@ type ActionResult =
   | { ok: false; error: string; code?: string };
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   const id = args.params.connectionId;
   const values = formValues(await args.request.formData());
@@ -113,7 +113,7 @@ export async function action(args: Route.ActionArgs) {
       });
       if (!parsed.success)
         return { ok: false, error: parsed.error.issues.map((i) => i.message).join("; ") } satisfies ActionResult;
-      const result = await attempt(env.CONNECTIONS.updateConnection(session.ctx, id, parsed.data));
+      const result = await attempt(services.connections.updateConnection(session.ctx, id, parsed.data));
       return result.ok ? { ok: true, message: "Settings saved." } : result;
     }
     case "values": {
@@ -126,14 +126,14 @@ export async function action(args: Route.ActionArgs) {
       });
       if (!parsed.success)
         return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") };
-      const result = await attempt(env.CONNECTIONS.setConnectionCredential(session.ctx, id, parsed.data));
+      const result = await attempt(services.connections.setConnectionCredential(session.ctx, id, parsed.data));
       return result.ok ? { ok: true, message: `Values saved at ${environmentName ?? "the connection base"}.` } : result;
     }
     case "clear": {
       assertGrant(session.ctx, "tpx.connections.connections.rotate_credential");
       const key = values.key ?? "";
       const result = await attempt(
-        env.CONNECTIONS.setConnectionCredential(session.ctx, id, { environmentName, values: { [key]: "" } }),
+        services.connections.setConnectionCredential(session.ctx, id, { environmentName, values: { [key]: "" } }),
       );
       return result.ok ? { ok: true, message: `Cleared ${key}.` } : result;
     }
@@ -143,21 +143,21 @@ export async function action(args: Route.ActionArgs) {
         environmentName === null
           ? { level: "connection-base", connectionId: id }
           : { level: "connection-environment", connectionId: id, environmentName };
-      const result = await attempt(env.CONNECTIONS.revealSecret(session.ctx, locator, values.key ?? ""));
+      const result = await attempt(services.connections.revealSecret(session.ctx, locator, values.key ?? ""));
       if (!result.ok) return result;
       return data<ActionResult>({ ok: true, revealed: result.value }, { headers: { "Cache-Control": "no-store" } });
     }
     case "test": {
       assertGrant(session.ctx, "tpx.connections.connections.test_connection");
-      const result = await attempt(env.CONNECTIONS.testConnection(session.ctx, id, environmentName));
+      const result = await attempt(services.connections.testConnection(session.ctx, id, environmentName));
       return result.ok ? { ok: true, test: result.value } : result;
     }
     case "delete": {
       assertGrant(session.ctx, "tpx.connections.connections.delete");
-      const connection = await rpc(env.CONNECTIONS.getConnection(session.ctx, id));
+      const connection = await call(services.connections.getConnection(session.ctx, id));
       if (values.confirm !== connection.name)
         return { ok: false, error: "Type the connection's name to confirm deletion." };
-      const result = await attempt(env.CONNECTIONS.deleteConnection(session.ctx, id));
+      const result = await attempt(services.connections.deleteConnection(session.ctx, id));
       if (!result.ok) return result;
       throw redirect(scopePath(session.project.slug, session.environment.name, "connections"));
     }

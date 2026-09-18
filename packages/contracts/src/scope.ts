@@ -5,11 +5,12 @@
  *   Project     — a unit of delivered work
  *   Environment — a target within a project
  *
- * tpx-web resolves the identity at ingress and passes a `Ctx` inward on every
- * call: by RPC argument during SSR, by the `x-tpx-ctx` header on the
- * `/api/<product>/*` path. Services trust the context they receive because
- * nothing else can call them — and still parse it, because a malformed
- * context is a programming error worth failing loudly on.
+ * The shell resolves the identity at ingress and passes a `Ctx` inward on
+ * every call — as an argument, whether a loader calls a service method
+ * directly or the `/api/<product>/*` forwarder hands a request to a service's
+ * JSON surface. Services trust the context they receive because nothing but
+ * the shell, in the same Worker, can call them — and still parse it, because
+ * a malformed context is a programming error worth failing loudly on.
  */
 import { z } from "zod";
 
@@ -67,17 +68,4 @@ export function parseTenantCtx(input: unknown): TenantCtx {
 
 export function scopeOf(ctx: Ctx): Scope {
   return { tenantId: ctx.tenantId, projectId: ctx.projectId, environmentId: ctx.environmentId };
-}
-
-/** The header tpx-web forwards a context on for `/api/<product>/*` requests. */
-export const CTX_HEADER = "x-tpx-ctx";
-
-export function encodeCtxHeader(ctx: Ctx): string {
-  return JSON.stringify(CtxSchema.parse(ctx));
-}
-
-/** Returns `null` for an absent header; throws on a present-but-invalid one. */
-export function decodeCtxHeader(value: string | null | undefined): Ctx | null {
-  if (value === null || value === undefined || value === "") return null;
-  return CtxSchema.parse(JSON.parse(value));
 }

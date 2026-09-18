@@ -46,7 +46,7 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export function fromBase64(value: string): Uint8Array {
+export function fromBase64(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value.trim());
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
@@ -57,7 +57,7 @@ function toHex(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function versionOf(raw: Uint8Array): Promise<string> {
+async function versionOf(raw: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", raw));
   return toHex(digest.slice(0, 6));
 }
@@ -73,7 +73,7 @@ export async function loadMasterKeys(env: {
   CONNECTIONS_MASTER_KEY?: string;
   CONNECTIONS_MASTER_KEY_PREVIOUS?: string;
 }): Promise<MasterKeys> {
-  if (!env.CONNECTIONS_MASTER_KEY) throw new Error("tpx-connections: CONNECTIONS_MASTER_KEY is not configured");
+  if (!env.CONNECTIONS_MASTER_KEY) throw new Error("connections service: CONNECTIONS_MASTER_KEY is not configured");
   const current = await importMasterKey(env.CONNECTIONS_MASTER_KEY, "CONNECTIONS_MASTER_KEY");
   const byVersion = new Map<string, CryptoKey>([[current.version, current.key]]);
   if (env.CONNECTIONS_MASTER_KEY_PREVIOUS) {

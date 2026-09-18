@@ -4,9 +4,9 @@
  *
  * `grantsAt` asks the snapshot every catalog key at ONE scope — the request's
  * innermost scope — so a service can enforce with a set lookup and never needs
- * the provider. This is what lets Service Workers trust the context they
- * receive: the only scope a product can pass inward is the one tpx-web handed
- * it, and the grants were computed for exactly that scope.
+ * the provider. This is what lets services trust the context they receive:
+ * the only scope a product can pass inward is the one the shell handed it,
+ * and the grants were computed for exactly that scope.
  */
 import type { LooseScopeId } from "@alfiz/core";
 import { catalog as tpxCatalog, type TpxKey } from "./catalog.ts";

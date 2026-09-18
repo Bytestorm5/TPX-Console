@@ -1,7 +1,7 @@
 /**
- * The store seam of tpx-auth: everything the service persists, behind one
- * interface so the Worker-runtime tests run against memory and production
- * runs against Convex. The Alfiz half IS Alfiz's storage seam; the tenancy
+ * The store seam of the auth service: everything the service persists,
+ * behind one interface so the Worker-runtime tests run against memory and
+ * production runs against Convex. The Alfiz half IS Alfiz's storage seam; the tenancy
  * half is the console's own.
  */
 import type { GrantRow } from "@alfiz/core";

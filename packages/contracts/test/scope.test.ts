@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CtxSchema,
-  EnvironmentNameSchema,
-  SlugSchema,
-  decodeCtxHeader,
-  encodeCtxHeader,
-  parseCtx,
-  scopeOf,
-} from "../src/scope.ts";
+import { CtxSchema, EnvironmentNameSchema, SlugSchema, parseCtx, scopeOf } from "../src/scope.ts";
 
 const ctx = {
   tenantId: "org_1",
@@ -30,13 +22,6 @@ describe("Ctx", () => {
   it("rejects empty ids and non-string grants", () => {
     expect(CtxSchema.safeParse({ ...ctx, tenantId: "" }).success).toBe(false);
     expect(CtxSchema.safeParse({ ...ctx, grants: [1] }).success).toBe(false);
-  });
-
-  it("round-trips through the forwarded header", () => {
-    expect(decodeCtxHeader(encodeCtxHeader(ctx))).toEqual(ctx);
-    expect(decodeCtxHeader(null)).toBeNull();
-    expect(() => decodeCtxHeader("{}")).toThrow();
-    expect(() => decodeCtxHeader("not json")).toThrow();
   });
 
   it("extracts the scope triple", () => {

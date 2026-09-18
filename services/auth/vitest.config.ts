@@ -14,8 +14,13 @@ export default defineConfig({
         },
       },
       {
-        // The Worker itself, inside workerd, against the in-memory store.
-        plugins: [cloudflareTest({ wrangler: { configPath: "./wrangler.jsonc" } })],
+        // The service inside workerd — the runtime it ships in — against the
+        // in-memory store. The service is a library with no Worker config of
+        // its own, so the runtime is described here; keep it in step with
+        // apps/web/wrangler.jsonc.
+        plugins: [
+          cloudflareTest({ miniflare: { compatibilityDate: "2026-09-01", compatibilityFlags: ["nodejs_compat"] } }),
+        ],
         test: {
           name: "workers",
           include: ["test/workers/**/*.test.ts"],

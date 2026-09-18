@@ -1,14 +1,11 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
-// A throwaway master key for tests only (32 zero-free random bytes, base64).
-const TEST_MASTER_KEY = "VGVzdE1hc3RlcktleUZvclRweENvbm5lY3Rpb25zMDE=";
-const TEST_PREVIOUS_KEY = "UHJldmlvdXNNYXN0ZXJLZXlGb3JUcHhDb25uZWN0MDE=";
-
 export default defineConfig({
   test: {
     projects: [
       {
+        // The Convex store adapter, against convex-test's in-memory backend.
         test: {
           name: "convex",
           include: ["test/convex/**/*.test.ts"],
@@ -17,17 +14,13 @@ export default defineConfig({
         },
       },
       {
+        // The service inside workerd — the runtime it ships in — against the
+        // in-memory store. The service is a library with no Worker config of
+        // its own, so the runtime is described here; keep it in step with
+        // apps/web/wrangler.jsonc. Tests construct the service with an explicit
+        // env (see test/workers/env.ts), so no bindings are declared.
         plugins: [
-          cloudflareTest({
-            wrangler: { configPath: "./wrangler.jsonc" },
-            miniflare: {
-              bindings: {
-                CONVEX_DEPLOY_KEY: "test",
-                CONNECTIONS_MASTER_KEY: TEST_MASTER_KEY,
-                CONNECTIONS_MASTER_KEY_PREVIOUS: TEST_PREVIOUS_KEY,
-              },
-            },
-          }),
+          cloudflareTest({ miniflare: { compatibilityDate: "2026-09-01", compatibilityFlags: ["nodejs_compat"] } }),
         ],
         test: {
           name: "workers",

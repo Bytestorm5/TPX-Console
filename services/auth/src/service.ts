@@ -1,17 +1,19 @@
 /**
- * tpx-auth — the RPC surface tpx-web calls over its service binding.
+ * The auth service — the surface the console calls in-process. The Worker
+ * entry constructs one `AuthService` with the Worker's env; loaders, actions
+ * and the `/api/workspace/*` forwarder call its methods directly.
  *
  * Every tenant-scoped method parses its context, enforces the grant the
  * catalog names for it (`requireGrant`) and, for anything that changes
  * authority or destroys data, re-checks freshly against the org root
  * (`can.fresh`) so a stale context can never widen access. Nothing here is
- * reachable from the internet: the Worker has no routes.
+ * reachable from the internet on its own: only the shell, which resolves the
+ * identity and the scope first, ever calls it.
  *
  * Clerk only says who the user is. Tenants, membership and invitations are
  * the console's own rows, and membership is mirrored into Alfiz's directory
  * (`org:<tenantId>` in the user's closure) so tenant-wide grants apply.
  */
-import { WorkerEntrypoint } from "cloudflare:workers";
 import { z } from "zod";
 import { orgSubject, userSubject, type PrincipalRef, type Provenance } from "@alfiz/core";
 import {
@@ -43,15 +45,7 @@ import {
   type UserSession,
 } from "@tpx/contracts/auth";
 import type { ProductCapabilities } from "@tpx/contracts/product";
-import {
-  CTX_HEADER,
-  CtxSchema,
-  IdSchema,
-  TenantCtxSchema,
-  decodeCtxHeader,
-  type Ctx,
-  type TenantCtx,
-} from "@tpx/contracts/scope";
+import { CtxSchema, IdSchema, TenantCtxSchema, type Ctx, type TenantCtx } from "@tpx/contracts/scope";
 import {
   ConflictError,
   ForbiddenError,
@@ -74,6 +68,7 @@ import { convexStore } from "./store/convex-store.ts";
 import { memoryStore } from "./store/memory-store.ts";
 import type { AuthStore } from "./store/types.ts";
 
+/** The slice of the Worker's env the auth service reads. */
 export interface AuthEnv {
   CONVEX_URL: string;
   CONVEX_DEPLOY_KEY: string;
@@ -147,7 +142,7 @@ function resolveStore(env: AuthEnv): AuthStore {
     return devMemoryStore;
   }
   if (!env.CONVEX_URL || !env.CONVEX_DEPLOY_KEY) {
-    throw new Error("tpx-auth: CONVEX_URL and CONVEX_DEPLOY_KEY must be configured");
+    throw new Error("auth service: CONVEX_URL and CONVEX_DEPLOY_KEY must be configured");
   }
   const key = `${env.CONVEX_URL}${SEP}${env.CONVEX_DEPLOY_KEY}`;
   let store = storesByUrl.get(key);
@@ -160,19 +155,16 @@ function resolveStore(env: AuthEnv): AuthStore {
 
 const ensureUserSeen = new Map<string, number>();
 
-/** The forwarder's context header, or null for anything missing or malformed (a malformed header is a 401, not a crash). */
-function ctxFromHeader(request: Request): Ctx | null {
-  try {
-    return decodeCtxHeader(request.headers.get(CTX_HEADER));
-  } catch {
-    return null;
-  }
-}
+export class AuthService implements AuthServiceContract {
+  readonly #env: AuthEnv;
 
-export class AuthService extends WorkerEntrypoint<AuthEnv> implements AuthServiceContract {
+  constructor(env: AuthEnv) {
+    this.#env = env;
+  }
+
   // -- plumbing -----------------------------------------------------------------
   async #runtime(): Promise<AlfizRuntime> {
-    const runtime = getAlfiz(resolveStore(this.env));
+    const runtime = getAlfiz(resolveStore(this.#env));
     await runtime.ready;
     return runtime;
   }
@@ -296,14 +288,16 @@ export class AuthService extends WorkerEntrypoint<AuthEnv> implements AuthServic
     return project;
   }
 
-  // -- health -------------------------------------------------------------------
-  /** The HTTP surface behind tpx-web's `/api/workspace/*` forwarder. */
-  override async fetch(request: Request): Promise<Response> {
+  // -- the JSON surface ---------------------------------------------------------
+  /**
+   * The HTTP surface behind the shell's `/api/workspace/*` forwarder. The
+   * forwarder has already resolved the caller's scope into `ctx`, and the
+   * request URL is relative to the product root (`/whoami`, not
+   * `/api/workspace/whoami`).
+   */
+  async handle(ctx: Ctx, request: Request): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === "/healthz") return Response.json({ ok: true, service: "tpx-auth" });
-    const ctx = ctxFromHeader(request);
-    if (!ctx) return Response.json({ error: "missing or invalid context" }, { status: 401 });
-    if (request.method === "GET" && url.pathname === "/whoami") return Response.json(ctx);
+    if (request.method === "GET" && url.pathname === "/whoami") return Response.json(parse(CtxSchema, ctx));
     return Response.json({ error: "not found" }, { status: 404 });
   }
 

@@ -1,14 +1,16 @@
 /**
- * tpx-connections — the RPC surface. Tenant-level objects take a TenantCtx,
- * project- and environment-shaped ones the full Ctx; every method enforces
- * the grant the catalog names for it and scopes every read by tenant.
+ * The connections service — the surface the console calls in-process. The
+ * Worker entry constructs one `ConnectionsService` with the Worker's env;
+ * loaders, actions and the `/api/connections/*` forwarder call its methods
+ * directly. Tenant-level objects take a TenantCtx, project- and
+ * environment-shaped ones the full Ctx; every method enforces the grant the
+ * catalog names for it and scopes every read by tenant.
  *
  * Secrets: plaintext exists only inside a request that creates, rotates,
  * tests, executes with, promotes, or explicitly reveals a credential. Every
  * read surface returns hints. Reveals are separately permissioned and always
  * audited with the level that supplied the value.
  */
-import { WorkerEntrypoint } from "cloudflare:workers";
 import { z } from "zod";
 import {
   AttachConnectionInputSchema,
@@ -37,12 +39,10 @@ import {
 } from "@tpx/contracts/connections";
 import type { ProductCapabilities } from "@tpx/contracts/product";
 import {
-  CTX_HEADER,
   CtxSchema,
   EnvironmentNameSchema as ConnectionEnvironmentNameSchema,
   IdSchema,
   TenantCtxSchema,
-  decodeCtxHeader,
   type Ctx,
   type TenantCtx,
 } from "@tpx/contracts/scope";
@@ -72,6 +72,7 @@ import { convexStore } from "./store/convex-store.ts";
 import { memoryStore } from "./store/memory-store.ts";
 import type { AttachmentRow, BindingRow, ConnectionRow, ConnectionsStore, OwnerRef, SecretRow } from "./store/types.ts";
 
+/** The slice of the Worker's env the connections service reads. */
 export interface ConnectionsEnv {
   CONVEX_URL: string;
   CONVEX_DEPLOY_KEY: string;
@@ -158,7 +159,7 @@ function resolveRuntime(env: ConnectionsEnv): Runtime {
   const existing = runtimes.get(key);
   if (existing) return existing;
   if (!storeOverride && !memory && (!env.CONVEX_URL || !env.CONVEX_DEPLOY_KEY)) {
-    throw new Error("tpx-connections: CONVEX_URL and CONVEX_DEPLOY_KEY must be configured");
+    throw new Error("connections service: CONVEX_URL and CONVEX_DEPLOY_KEY must be configured");
   }
   const store =
     storeOverride ??
@@ -175,18 +176,15 @@ function resolveRuntime(env: ConnectionsEnv): Runtime {
   return runtime;
 }
 
-/** The forwarder's context header, or null for anything missing or malformed (a malformed header is a 401, not a crash). */
-function ctxFromHeader(request: Request): Ctx | null {
-  try {
-    return decodeCtxHeader(request.headers.get(CTX_HEADER));
-  } catch {
-    return null;
-  }
-}
+export class ConnectionsService implements ConnectionsServiceContract {
+  readonly #env: ConnectionsEnv;
 
-export class ConnectionsService extends WorkerEntrypoint<ConnectionsEnv> implements ConnectionsServiceContract {
+  constructor(env: ConnectionsEnv) {
+    this.#env = env;
+  }
+
   #rt(): Runtime {
-    return resolveRuntime(this.env);
+    return resolveRuntime(this.#env);
   }
 
   #tenantCtx(ctx: unknown, key: TpxKey): TenantCtx {
@@ -404,18 +402,16 @@ export class ConnectionsService extends WorkerEntrypoint<ConnectionsEnv> impleme
     return out;
   }
 
-  // -- health & catalog ---------------------------------------------------------------
+  // -- the JSON surface & catalog -----------------------------------------------------
   /**
-   * The HTTP surface behind tpx-web's `/api/connections/*` forwarder. The
-   * forwarder resolved the scope and put the `Ctx` on `x-tpx-ctx`; every
-   * handler here goes through the same RPC methods, so the grant checks and
+   * The HTTP surface behind the shell's `/api/connections/*` forwarder. The
+   * forwarder has already resolved the caller's scope into `ctx`, and the
+   * request URL is relative to the product root. Every handler here goes
+   * through the same methods the loaders call, so the grant checks and the
    * audit trail are identical whichever way a call arrives.
    */
-  override async fetch(request: Request): Promise<Response> {
+  async handle(ctx: Ctx, request: Request): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === "/healthz") return Response.json({ ok: true, service: "tpx-connections" });
-    const ctx = ctxFromHeader(request);
-    if (!ctx) return Response.json({ error: "missing or invalid context" }, { status: 401 });
     try {
       if (request.method === "GET" && url.pathname === "/providers") return Response.json(await this.listProviders());
       const resolveMatch = /^\/resolve\/([a-z]+)$/.exec(url.pathname);

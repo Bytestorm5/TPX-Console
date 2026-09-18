@@ -4,16 +4,16 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 /**
- * Local development runs the whole topology in workerd: tpx-web as the entry
- * Worker and every service as an auxiliary Worker reached by service binding,
- * exactly as in production. With TPX_DEV_FIXTURE=1 the identity is a fixture
- * (no Clerk keys needed) and the services keep state in memory (no Convex
- * deployment needed) — the fastest way to see the console.
+ * Local development runs the one Worker in workerd, exactly as in production:
+ * the console and every service in the same isolate. With TPX_DEV_FIXTURE=1
+ * the identity is a fixture (no Clerk keys needed) and the services keep
+ * their state in memory (no Convex deployment needed) — the fastest way to
+ * see the console.
  */
 const fixture = process.env.TPX_DEV_FIXTURE === "1";
 
 /**
- * A throwaway master key for fixture mode only: the connections Worker
+ * A throwaway master key for fixture mode only: the connections service
  * refuses to start without one, and in fixture mode it encrypts into an
  * in-memory store that dies with the process. Never a real secret.
  */
@@ -26,26 +26,16 @@ export default defineConfig({
       ...(fixture
         ? {
             config: (config) => ({
-              vars: { ...config.vars, TPX_DEV_FIXTURE: "1", TPX_PREVIEW_PRODUCTS: "operator,dispatcher,integrator" },
+              vars: {
+                ...config.vars,
+                TPX_DEV_FIXTURE: "1",
+                TPX_PREVIEW_PRODUCTS: "operator,dispatcher,integrator",
+                TPX_STORE: "memory",
+                CONNECTIONS_MASTER_KEY: FIXTURE_MASTER_KEY,
+              },
             }),
           }
         : {}),
-      auxiliaryWorkers: [
-        {
-          configPath: "../../services/auth/wrangler.jsonc",
-          ...(fixture ? { config: (config) => ({ vars: { ...config.vars, TPX_STORE: "memory" } }) } : {}),
-        },
-        {
-          configPath: "../../services/connections/wrangler.jsonc",
-          ...(fixture
-            ? {
-                config: (config) => ({
-                  vars: { ...config.vars, TPX_STORE: "memory", CONNECTIONS_MASTER_KEY: FIXTURE_MASTER_KEY },
-                }),
-              }
-            : {}),
-        },
-      ],
     }),
     tailwindcss(),
     reactRouter(),

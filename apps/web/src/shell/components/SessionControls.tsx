@@ -1,6 +1,6 @@
 /**
  * The tenant switcher under the logo (the console's own: tenants live in
- * tpx-auth, not in the identity provider) and the user bubble at the
+ * the auth service, not in the identity provider) and the user bubble at the
  * bottom (Clerk's, or a static stand-in in fixture mode).
  */
 import { UserButton } from "@clerk/react-router";

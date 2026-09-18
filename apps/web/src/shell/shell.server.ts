@@ -7,9 +7,9 @@ import type { Environment, Project } from "@tpx/contracts/auth";
 import { cloudflareContext, type ScopeSession, type TenantSession } from "./context.ts";
 import { isFixtureMode } from "./env.ts";
 import { buildProductGroups, buildWorkspaceGroup } from "./nav.ts";
-import { rpc } from "./rpc.server.ts";
 import { productCapabilities, readThemeCookie } from "./session.server.ts";
 import { scopePath } from "./scope.ts";
+import { call } from "./services.server.ts";
 import type { SidebarProps } from "./components/Sidebar.tsx";
 import { products } from "../registry.ts";
 
@@ -18,10 +18,10 @@ export async function sidebarFor(
   session: TenantSession,
   scope: Pick<ScopeSession, "project" | "environment" | "environments" | "ctx"> | null,
 ): Promise<{ sidebar: SidebarProps; projects: Project[] }> {
-  const { env } = args.context.get(cloudflareContext);
+  const { env, services } = args.context.get(cloudflareContext);
   const [projects, capabilities] = await Promise.all([
-    rpc(env.AUTH.listProjects(session.tenantCtx)),
-    productCapabilities(env),
+    call(services.auth.listProjects(session.tenantCtx)),
+    productCapabilities(services, env),
   ]);
   const scopeBase = scope ? scopePath(scope.project.slug, scope.environment.name) : null;
   const environments: Environment[] = scope ? scope.environments : [];

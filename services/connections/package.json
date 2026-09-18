@@ -2,15 +2,14 @@
   "name": "@tpx/connections-service",
   "version": "0.1.0",
   "private": true,
-  "description": "tpx-connections: credentials, connector implementations, capability contracts, scope resolution and the audit log. Secrets are encrypted in the Worker; Convex only ever stores ciphertext.",
+  "description": "The connections service: credentials, connector implementations, capability contracts, scope resolution and the audit log. Secrets are encrypted in the Worker; Convex only ever stores ciphertext. A library the console Worker mounts in-process.",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "typegen": "wrangler types --include-runtime=false",
-    "typecheck": "pnpm typegen && tsc -p tsconfig.json",
-    "test": "vitest run",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "deploy:dry-run": "wrangler deploy --dry-run --outdir dist"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tpx/contracts": "workspace:*",
@@ -25,7 +24,6 @@
     "@cloudflare/workers-types": "5.20260917.1",
     "convex-test": "0.0.59",
     "typescript": "5.9.3",
-    "vitest": "4.1.11",
-    "wrangler": "4.134.0"
+    "vitest": "4.1.11"
   }
 }

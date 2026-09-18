@@ -1,8 +1,8 @@
 /**
- * The ancestry seam: environment → project → tenant → *. Only tpx-auth can
- * answer it, because only tpx-auth holds the tenancy tables — which is the
- * architectural reason products attach to it rather than resolving scopes
- * themselves.
+ * The ancestry seam: environment → project → tenant → *. Only the auth
+ * service can answer it, because only the auth service holds the tenancy
+ * tables — which is the architectural reason products attach to it rather
+ * than resolving scopes themselves.
  *
  * An id that no longer exists resolves to `["*"]` (rootless) rather than
  * throwing: a stale grant on a deleted project must not brick every request
@@ -16,7 +16,7 @@ import type { TenancyStore } from "./store/types.ts";
 export function storeAncestry(tenancy: TenancyStore): AncestryResolver {
   return async (scope) => {
     const parsed = parseTpxScope(scope);
-    if (!parsed) throw new Error(`tpx-auth: cannot resolve ancestry of scope ${JSON.stringify(scope)}`);
+    if (!parsed) throw new Error(`auth service: cannot resolve ancestry of scope ${JSON.stringify(scope)}`);
     switch (parsed.level) {
       case "global":
         return [];

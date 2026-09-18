@@ -38,6 +38,12 @@ importers:
       '@clerk/react-router':
         specifier: 3.6.24
         version: 3.6.24(react-dom@19.3.0(react@19.3.0))(react-router@8.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
+      '@tpx/auth-service':
+        specifier: workspace:*
+        version: link:../../services/auth
+      '@tpx/connections-service':
+        specifier: workspace:*
+        version: link:../../services/connections
       '@tpx/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -255,9 +261,6 @@ importers:
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.6.1)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0))
-      wrangler:
-        specifier: 4.134.0
-        version: 4.134.0(@cloudflare/workers-types@5.20260917.1)(@types/node@26.6.1)
 
   services/connections:
     dependencies:
@@ -295,9 +298,6 @@ importers:
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@26.6.1)(vite@8.3.0(@types/node@26.6.1)(esbuild@0.28.1)(jiti@2.7.0))
-      wrangler:
-        specifier: 4.134.0
-        version: 4.134.0(@cloudflare/workers-types@5.20260917.1)(@types/node@26.6.1)
 
 packages:
 

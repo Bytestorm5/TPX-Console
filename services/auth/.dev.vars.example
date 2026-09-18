@@ -1,2 +1,0 @@
-# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
-CONVEX_DEPLOY_KEY=dev:your-deployment|your-deploy-key

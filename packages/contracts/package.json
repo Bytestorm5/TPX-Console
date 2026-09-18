@@ -2,7 +2,7 @@
   "name": "@tpx/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "RPC types and zod schemas shared by tpx-web and every service, one module per service, plus the event bus definitions.",
+  "description": "Service interfaces and zod schemas shared by the shell and every service, one module per service, plus the event bus definitions.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

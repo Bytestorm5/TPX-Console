@@ -23,7 +23,7 @@ import {
 import type { Route } from "./+types/attachments";
 import { formValues } from "~/lib/forms.ts";
 import { cloudflareContext } from "~/shell/context.ts";
-import { attempt, rpc } from "~/shell/rpc.server.ts";
+import { attempt, call } from "~/shell/services.server.ts";
 import { assertGrant, requireScope } from "~/shell/session.server.ts";
 import { scopePath } from "~/shell/scope.ts";
 import { ActionNotice } from "../lib.tsx";
@@ -31,18 +31,18 @@ import { ActionNotice } from "../lib.tsx";
 export const meta: Route.MetaFunction = () => [{ title: "Attachments · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.attachments.read");
   const canSeeConnections = hasGrant(session.ctx, "tpx.connections.connections.read");
   const canSeeUsage = hasGrant(session.ctx, "tpx.connections.usage.read");
   const [attachments, connections, resolutions] = await Promise.all([
-    rpc(env.CONNECTIONS.listAttachments(session.ctx)),
-    canSeeConnections ? rpc(env.CONNECTIONS.listConnections(session.ctx)) : Promise.resolve([]),
+    call(services.connections.listAttachments(session.ctx)),
+    canSeeConnections ? call(services.connections.listConnections(session.ctx)) : Promise.resolve([]),
     canSeeUsage
       ? Promise.all(
           CAPABILITIES.map((capability) =>
-            env.CONNECTIONS.resolve(session.ctx, capability).catch((): Resolution | null => null),
+            services.connections.resolve(session.ctx, capability).catch((): Resolution | null => null),
           ),
         )
       : Promise.resolve([] as (Resolution | null)[]),
@@ -73,7 +73,7 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   const values = formValues(await args.request.formData());
   switch (values.intent) {
@@ -91,7 +91,7 @@ export async function action(args: Route.ActionArgs) {
           ok: false as const,
           error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
         };
-      const result = await attempt(env.CONNECTIONS.attachConnection(session.ctx, parsed.data));
+      const result = await attempt(services.connections.attachConnection(session.ctx, parsed.data));
       if (!result.ok) return result;
       throw redirect(
         scopePath(session.project.slug, session.environment.name, `connections/attachments/${result.value.id}`),
@@ -100,7 +100,7 @@ export async function action(args: Route.ActionArgs) {
     case "default": {
       assertGrant(session.ctx, "tpx.connections.attachments.update_attachment");
       const result = await attempt(
-        env.CONNECTIONS.updateAttachment(session.ctx, values.attachmentId ?? "", { isDefault: true }),
+        services.connections.updateAttachment(session.ctx, values.attachmentId ?? "", { isDefault: true }),
       );
       return result.ok
         ? { ok: true as const, message: `${result.value.name} is now the default for ${result.value.capability}.` }
@@ -108,7 +108,7 @@ export async function action(args: Route.ActionArgs) {
     }
     case "detach": {
       assertGrant(session.ctx, "tpx.connections.attachments.detach_connection");
-      const result = await attempt(env.CONNECTIONS.detachConnection(session.ctx, values.attachmentId ?? ""));
+      const result = await attempt(services.connections.detachConnection(session.ctx, values.attachmentId ?? ""));
       return result.ok ? { ok: true as const, message: "Detached." } : result;
     }
     default:

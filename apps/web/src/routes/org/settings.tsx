@@ -5,7 +5,7 @@ import { hasGrant } from "@tpx/identity";
 import { Button, Card, CardHeader, Field, Input, PageHeader } from "@tpx/ui";
 import type { Route } from "./+types/settings";
 import { cloudflareContext } from "../../shell/context.ts";
-import { attempt } from "../../shell/rpc.server.ts";
+import { attempt } from "../../shell/services.server.ts";
 import { assertGrant, requireTenant } from "../../shell/session.server.ts";
 import { formValues } from "../../lib/forms.ts";
 import { formatWhen } from "../../lib/format.ts";
@@ -19,12 +19,12 @@ export function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   assertGrant(session.tenantCtx, "tpx.workspace.settings.update_settings");
   const parsed = UpdateTenantInputSchema.safeParse(formValues(await args.request.formData()));
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
-  return attempt(env.AUTH.updateTenant(session.tenantCtx, parsed.data));
+  return attempt(services.auth.updateTenant(session.tenantCtx, parsed.data));
 }
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {

@@ -17,7 +17,7 @@ import {
 } from "@tpx/ui";
 import type { Route } from "./+types/connected";
 import { cloudflareContext } from "~/shell/context.ts";
-import { rpc } from "~/shell/rpc.server.ts";
+import { call } from "~/shell/services.server.ts";
 import { assertGrant, requireScope } from "~/shell/session.server.ts";
 import { scopePath } from "~/shell/scope.ts";
 import { TestBadge, ProviderIcon } from "../lib.tsx";
@@ -25,14 +25,14 @@ import { TestBadge, ProviderIcon } from "../lib.tsx";
 export const meta: Route.MetaFunction = () => [{ title: "Connections · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.connections.read");
   const [connections, providers, attachments] = await Promise.all([
-    rpc(env.CONNECTIONS.listConnections(session.ctx)),
-    rpc(env.CONNECTIONS.listProviders()),
+    call(services.connections.listConnections(session.ctx)),
+    call(services.connections.listProviders()),
     hasGrant(session.ctx, "tpx.connections.attachments.read")
-      ? rpc(env.CONNECTIONS.listAttachments(session.ctx))
+      ? call(services.connections.listAttachments(session.ctx))
       : Promise.resolve([]),
   ]);
   const base = scopePath(session.project.slug, session.environment.name);

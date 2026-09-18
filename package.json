@@ -1,13 +1,14 @@
 {
   "name": "tpx-console",
   "private": true,
-  "description": "Trusplex Console — one repository, many Workers, one public application.",
+  "description": "Trusplex Console — one repository, one Worker, every service a part of the codebase.",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22.22.0"
   },
   "scripts": {
     "dev": "pnpm --filter @tpx/web dev",
+    "dev:fixture": "pnpm --filter @tpx/web dev:fixture",
     "build": "pnpm --filter @tpx/web build",
     "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
     "test": "pnpm -r --workspace-concurrency=1 test",
@@ -16,8 +17,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "check:service-routes": "node scripts/check-service-routes.mjs",
-    "check": "pnpm typecheck && pnpm lint && pnpm check:boundaries && pnpm check:service-routes && pnpm test"
+    "check:topology": "node scripts/check-topology.mjs",
+    "check": "pnpm typecheck && pnpm lint && pnpm check:boundaries && pnpm check:topology && pnpm test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

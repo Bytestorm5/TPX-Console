@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * The console in fixture mode: Ada Fixture signs in and tpx-auth bootstraps
- * "Ada's Org" for her (owner) with a Default project and the default
+ * The console in fixture mode: Ada Fixture signs in and the auth service
+ * bootstraps "Ada's Org" for her (owner) with a Default project and the default
  * vocabulary (just `prod`; the tests extend it with `staging`). State is in
  * memory and shared across tests, so they run serially in order.
  */

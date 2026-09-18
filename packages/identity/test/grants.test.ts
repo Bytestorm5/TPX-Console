@@ -1,6 +1,6 @@
 import { userSubject, orgSubject } from "@alfiz/core";
 import { describe, expect, it } from "vitest";
-import { decodeRpcError, ForbiddenError, type TpxError } from "../src/errors.ts";
+import { ForbiddenError, isTpxError } from "../src/errors.ts";
 import { grantsAt, hasGrant, productsWithGrants, requireGrant } from "../src/grants.ts";
 import { ROLE_IDS } from "../src/roles.ts";
 import { environmentScope, projectScope, tenantScope } from "../src/scopes.ts";
@@ -130,13 +130,13 @@ describe("pure enforcement", () => {
   it("lists the products a grant set touches", () => {
     expect([...productsWithGrants(ctx.grants)].sort()).toEqual(["connections", "operator"]);
   });
-  it("restores typed errors after an RPC hop", () => {
-    const hopped = new Error(new ForbiddenError("missing x", "x").message);
-    const restored = decodeRpcError(hopped);
-    expect(restored).toBeInstanceOf(ForbiddenError);
-    expect((restored as TpxError).status).toBe(403);
-    expect((restored as TpxError).detail).toBe("missing x");
-    const plain = new Error("boom");
-    expect(decodeRpcError(plain)).toBe(plain);
+  it("carries status, code and a plain detail as the message", () => {
+    const error = new ForbiddenError("missing x", "x");
+    expect(isTpxError(error)).toBe(true);
+    expect(error.status).toBe(403);
+    expect(error.code).toBe("forbidden");
+    expect(error.detail).toBe("missing x");
+    expect(error.message).toBe("missing x");
+    expect(isTpxError(new Error("boom"))).toBe(false);
   });
 });

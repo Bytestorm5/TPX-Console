@@ -2,9 +2,10 @@
 /**
  * Lint = the four boundary rules from the structure doc, mechanically:
  *   1. no cross-product imports (apps/web/src/products/<p> stays inside itself + shell/lib/@tpx)
- *   2. no service-to-service imports (services/<s> never imports another service or an app)
+ *   2. no service-to-service imports, no Worker entrypoints (services/<s> never imports another
+ *      service, an app, or `cloudflare:workers` — a service is a library the Worker constructs)
  *   3. no raw hex/px in products or the shell — tokens only
- *   4. (public routes on service Workers are checked by scripts/check-service-routes.mjs)
+ *   4. (one Worker — a single wrangler config, no service bindings — is checked by scripts/check-topology.mjs)
  * plus the usual TypeScript and hooks hygiene.
  */
 import js from "@eslint/js";
@@ -71,6 +72,11 @@ const boundaries = {
           /^@tpx\/(auth|connections|operator|dispatcher|integrator)-service/.test(spec)
         ) {
           context.report({ node, message: `Service may not import "${spec}"` });
+        } else if (spec === "cloudflare:workers") {
+          context.report({
+            node,
+            message: "A service is a library the Worker constructs with its env, not a Worker entrypoint",
+          });
         }
       }
     }

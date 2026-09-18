@@ -1,7 +1,7 @@
 /**
- * Ingress identity. tpx-web is the only place a session is validated: Clerk
+ * Ingress identity. The shell is the only place a session is validated: Clerk
  * verifies the session, this module turns it into a `SessionIdentity` — who
- * the user is, never which tenant they are in. Tenancy is tpx-auth's.
+ * the user is, never which tenant they are in. Tenancy is the auth service's.
  *
  * In development with TPX_DEV_FIXTURE=1 a fixture identity stands in for
  * Clerk so the whole console runs without keys; the branch is guarded by
@@ -64,7 +64,7 @@ export async function requireSignedIn(
   return identity as SignedInIdentity;
 }
 
-/** The profile from the identity provider — fetched only when tpx-auth's copy is missing or stale. */
+/** The profile from the identity provider — fetched only when the auth service's copy is missing or stale. */
 export async function fetchProfile(
   args: Pick<LoaderFunctionArgs, "request" | "context" | "params">,
   identity: SignedInIdentity,

@@ -19,7 +19,7 @@ import {
 import type { Route } from "./+types/audit";
 import { formatWhen } from "~/lib/format.ts";
 import { cloudflareContext } from "~/shell/context.ts";
-import { rpc } from "~/shell/rpc.server.ts";
+import { call } from "~/shell/services.server.ts";
 import { assertGrant, requireScope } from "~/shell/session.server.ts";
 import { scopePath } from "~/shell/scope.ts";
 import { LEVEL_LABELS } from "../lib.tsx";
@@ -27,7 +27,7 @@ import { LEVEL_LABELS } from "../lib.tsx";
 export const meta: Route.MetaFunction = () => [{ title: "Connections audit · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   assertGrant(session.ctx, "tpx.connections.audit.read");
   // Tenant-wide reading needs the grant *at the tenant*; a project-scoped grant only sees this project.
@@ -36,8 +36,8 @@ export async function loader(args: Route.LoaderArgs) {
   const scope = tenantWide && wantTenant ? "tenant" : "project";
   const entries =
     scope === "tenant"
-      ? await rpc(env.CONNECTIONS.listAudit(session.tenantCtx, { limit: 200 }))
-      : await rpc(env.CONNECTIONS.listAudit(session.ctx, { limit: 200, projectId: session.project.id }));
+      ? await call(services.connections.listAudit(session.tenantCtx, { limit: 200 }))
+      : await call(services.connections.listAudit(session.ctx, { limit: 200, projectId: session.project.id }));
   return {
     entries,
     scope,

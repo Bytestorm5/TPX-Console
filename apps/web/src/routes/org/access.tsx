@@ -20,24 +20,24 @@ import {
 } from "@tpx/ui";
 import type { Route } from "./+types/access";
 import { cloudflareContext } from "../../shell/context.ts";
-import { attempt, rpc } from "../../shell/rpc.server.ts";
+import { attempt, call } from "../../shell/services.server.ts";
 import { requireTenant } from "../../shell/session.server.ts";
 import { formValues } from "../../lib/forms.ts";
 
 export const meta: Route.MetaFunction = () => [{ title: "Access · Trusplex Console" }];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   const [grants, roles, projects] = await Promise.all([
-    rpc(env.AUTH.listGrants(session.tenantCtx)),
-    rpc(env.AUTH.listRoles()),
-    rpc(env.AUTH.listProjects(session.tenantCtx)),
+    call(services.auth.listGrants(session.tenantCtx)),
+    call(services.auth.listRoles()),
+    call(services.auth.listProjects(session.tenantCtx)),
   ]);
   const environments = (
     await Promise.all(
       projects.map((p) =>
-        rpc(env.AUTH.resolveScope({ tenantId: session.tenant.id, projectSlug: p.slug, environmentName: null })),
+        call(services.auth.resolveScope({ tenantId: session.tenant.id, projectSlug: p.slug, environmentName: null })),
       ),
     )
   ).flatMap((r) => (r ? r.environments.map((e) => ({ ...e, projectSlug: r.project.slug })) : []));
@@ -52,18 +52,18 @@ export async function loader(args: Route.LoaderArgs) {
 }
 
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireTenant(args);
   const values = formValues(await args.request.formData());
   if (values.intent === "delete" && values.grantId)
-    return attempt(env.AUTH.deleteGrant(session.tenantCtx, values.grantId));
+    return attempt(services.auth.deleteGrant(session.tenantCtx, values.grantId));
   const parsed = CreateGrantInputSchema.safeParse({
     subject: values.subject,
     roleId: values.roleId,
     scope: values.scope,
   });
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
-  return attempt(env.AUTH.createGrant(session.tenantCtx, parsed.data));
+  return attempt(services.auth.createGrant(session.tenantCtx, parsed.data));
 }
 
 function describeScope(

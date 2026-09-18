@@ -1,7 +1,7 @@
 /**
- * tpx-auth — tenants, projects, environments, membership, grants, audit.
- * The service is the Alfiz Application (org root) for the console; tpx-web
- * attaches an Alfiz client to it through the provider seam below. The
+ * The auth service — tenants, projects, environments, membership, grants,
+ * audit. The service is the Alfiz Application (org root) for the console; the
+ * shell attaches an Alfiz client to it through the provider seam below. The
  * identity provider (Clerk) only authenticates: tenants, membership and
  * invitations are the console's own, modelled on Alfiz's directory.
  */
@@ -10,7 +10,7 @@ import { EnvironmentNameSchema, IdSchema, SlugSchema, type Ctx, type TenantCtx }
 import type { ProductCapabilities } from "./product.ts";
 
 export const TenantSchema = z.object({
-  /** Assigned by tpx-auth (`tnt_…`). Tenants and their membership live in Alfiz, never in the identity provider. */
+  /** Assigned by the auth service (`tnt_…`). Tenants and their membership live in Alfiz, never in the identity provider. */
   id: IdSchema,
   name: z.string().min(1).max(120),
   /** The environment vocabulary. Connection defaults are keyed by these names. */
@@ -193,15 +193,17 @@ export interface ResolvedScope {
   environments: Environment[];
 }
 
-/** The identity tpx-web resolved from the Clerk session, plus the profile when tpx-web fetched it. */
+/** The identity the shell resolved from the Clerk session, plus the profile when the shell fetched it. */
 export interface EnsureUserInput {
   userId: string;
   profile?: ProfileInput;
 }
 
 // ---------------------------------------------------------------------------
-// The Alfiz provider seam — mirrors the parts of the provider contract a
-// read-only remote client needs. Plain data only: this crosses an RPC boundary.
+// The Alfiz provider seam — mirrors the parts of the provider contract the
+// shell's read-only client needs. Plain data only, so this package (and the
+// shell) depend on no Alfiz storage type; the `Wire` suffix marks the shapes
+// as the seam's own.
 // ---------------------------------------------------------------------------
 export type PrincipalRefWire = { userId: string } | { serviceId: string };
 
@@ -241,9 +243,9 @@ export interface AuthProviderSeam {
 }
 
 /**
- * The RPC surface of the tpx-auth Worker (`services/auth`). Every tenant-scoped
- * method takes a `TenantCtx` and enforces its own grants — defence in depth
- * behind the ingress check.
+ * The auth service's interface (`services/auth`), what the shell calls
+ * in-process. Every tenant-scoped method takes a `TenantCtx` and enforces its
+ * own grants — defence in depth behind the ingress check.
  */
 export interface AuthServiceContract extends AuthProviderSeam {
   capabilities(): Promise<ProductCapabilities>;

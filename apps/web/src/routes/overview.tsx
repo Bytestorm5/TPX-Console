@@ -7,7 +7,7 @@ import { Badge, Button, Card, CardHeader, Field, PageHeader, Select, Stat, butto
 import type { Route } from "./+types/overview";
 import { formValues } from "../lib/forms.ts";
 import { cloudflareContext } from "../shell/context.ts";
-import { attempt } from "../shell/rpc.server.ts";
+import { attempt } from "../shell/services.server.ts";
 import { requireScope } from "../shell/session.server.ts";
 import { scopePath } from "../shell/scope.ts";
 
@@ -16,12 +16,12 @@ export const meta: Route.MetaFunction = ({ loaderData }) => [
 ];
 
 export async function loader(args: Route.LoaderArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   const canSee = hasGrant(session.ctx, "tpx.connections.usage.read");
   const resolutions = canSee
     ? await Promise.all(
-        CAPABILITIES.map((capability) => env.CONNECTIONS.resolve(session.ctx, capability).catch(() => null)),
+        CAPABILITIES.map((capability) => services.connections.resolve(session.ctx, capability).catch(() => null)),
       )
     : [];
   return {
@@ -38,13 +38,13 @@ export async function loader(args: Route.LoaderArgs) {
 
 /** Adds an environment from the tenant vocabulary to this project (extending the vocabulary is a separate, tenant-level grant). */
 export async function action(args: Route.ActionArgs) {
-  const { env } = args.context.get(cloudflareContext);
+  const { services } = args.context.get(cloudflareContext);
   const session = requireScope(args);
   const values = formValues(await args.request.formData());
   const name = values.name === "__new" ? values.newName : values.name;
   const parsed = AddEnvironmentInputSchema.safeParse({ name, extendVocabulary: values.name === "__new" });
   if (!parsed.success) return { ok: false as const, error: parsed.error.issues.map((i) => i.message).join("; ") };
-  const result = await attempt(env.AUTH.addEnvironment(session.ctx, parsed.data));
+  const result = await attempt(services.auth.addEnvironment(session.ctx, parsed.data));
   if (!result.ok) return result;
   throw redirect(scopePath(session.project.slug, result.value.name));
 }

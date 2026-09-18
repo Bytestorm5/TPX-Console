@@ -1,8 +1,6 @@
-import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { aadFor, hintFor, loadMasterKeys, open, seal, sha256Hex, timingSafeEqual } from "../../src/crypto.ts";
-
-const E = env as unknown as { CONNECTIONS_MASTER_KEY: string; CONNECTIONS_MASTER_KEY_PREVIOUS: string };
+import { TEST_ENV as E, TEST_MASTER_KEY, TEST_PREVIOUS_KEY } from "./env.ts";
 const aad = aadFor({
   tenantId: "org_a",
   ownerKind: "connection-base",
@@ -54,12 +52,12 @@ describe("envelope encryption", () => {
   });
 
   it("rotates: the previous key still opens old envelopes, new envelopes use the current key", async () => {
-    const previousOnly = await loadMasterKeys({ CONNECTIONS_MASTER_KEY: E.CONNECTIONS_MASTER_KEY_PREVIOUS });
+    const previousOnly = await loadMasterKeys({ CONNECTIONS_MASTER_KEY: TEST_PREVIOUS_KEY });
     const old = await seal(previousOnly, aad, "old-secret-value");
     const both = await loadMasterKeys(E);
     expect(await open(both, aad, old)).toBe("old-secret-value");
     expect((await seal(both, aad, "new-secret-value")).keyVersion).toBe(both.current.version);
-    const currentOnly = await loadMasterKeys({ CONNECTIONS_MASTER_KEY: E.CONNECTIONS_MASTER_KEY });
+    const currentOnly = await loadMasterKeys({ CONNECTIONS_MASTER_KEY: TEST_MASTER_KEY });
     await expect(open(currentOnly, aad, old)).rejects.toMatchObject({ code: "secret_unavailable" });
   });
 

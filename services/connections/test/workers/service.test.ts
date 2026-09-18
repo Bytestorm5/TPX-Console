@@ -1,16 +1,9 @@
-import { createExecutionContext } from "cloudflare:test";
-import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { catalog, decodeRpcError } from "@tpx/identity";
-import { CTX_HEADER, encodeCtxHeader, type Ctx, type TenantCtx } from "@tpx/contracts/scope";
-import {
-  ConnectionsService,
-  __setFetchForTests,
-  __setStoreForTests,
-  memoryStore,
-  type ConnectionsEnv,
-} from "../../src/index.ts";
+import { catalog, isTpxError } from "@tpx/identity";
+import type { Ctx, TenantCtx } from "@tpx/contracts/scope";
+import { ConnectionsService, __setFetchForTests, __setStoreForTests, memoryStore } from "../../src/index.ts";
 import type { MemoryStore } from "../../src/store/memory-store.ts";
+import { TEST_ENV } from "./env.ts";
 
 const ALL = catalog.ownedKeys.filter((k) => k.startsWith("tpx.connections."));
 const READS = ALL.filter((k) => k.endsWith(".read"));
@@ -50,7 +43,7 @@ beforeEach(() => {
     fetchCalls.push({ url: String(input), headers: new Headers(init?.headers) });
     return new Response("{}", { status: fetchStatus });
   });
-  service = new ConnectionsService(createExecutionContext(), env as unknown as ConnectionsEnv);
+  service = new ConnectionsService(TEST_ENV);
 });
 
 async function status(promise: Promise<unknown>): Promise<number | null> {
@@ -58,7 +51,7 @@ async function status(promise: Promise<unknown>): Promise<number | null> {
     await promise;
     return null;
   } catch (e) {
-    return (decodeRpcError(e) as { status?: number }).status ?? -1;
+    return isTpxError(e) ? e.status : -1;
   }
 }
 
@@ -399,36 +392,23 @@ describe("attachments, bindings and resolution", () => {
   });
 });
 
-describe("http surface (behind the tpx-web forwarder)", () => {
-  const header = (ctx: Ctx) => ({ [CTX_HEADER]: encodeCtxHeader(ctx) });
-
-  it("refuses requests without a context and never serves anything public", async () => {
-    expect((await service.fetch(new Request("https://connections.internal/providers"))).status).toBe(401);
+describe("json surface (behind the shell's /api/connections forwarder)", () => {
+  it("knows only its own routes", async () => {
+    expect((await service.handle(base, new Request("https://connections.internal/nothing"))).status).toBe(404);
     expect(
-      (
-        await service.fetch(
-          new Request("https://connections.internal/providers", { headers: { [CTX_HEADER]: "garbage" } }),
-        )
-      ).status,
-    ).toBe(401);
-    expect(
-      (await service.fetch(new Request("https://connections.internal/nothing", { headers: header(base) }))).status,
+      (await service.handle(base, new Request("https://connections.internal/providers", { method: "POST" }))).status,
     ).toBe(404);
   });
 
-  it("serves providers and resolution through the same grant checks as RPC", async () => {
+  it("serves providers and resolution through the same grant checks as the direct methods", async () => {
     const connection = await cloudflareConnection();
     await service.attachConnection(base, { connectionId: connection.id, capability: "dns" });
 
-    const providers = await service.fetch(
-      new Request("https://connections.internal/providers", { headers: header(base) }),
-    );
+    const providers = await service.handle(base, new Request("https://connections.internal/providers"));
     expect(providers.status).toBe(200);
     expect(((await providers.json()) as { id: string }[]).map((p) => p.id)).toContain("cloudflare");
 
-    const resolved = await service.fetch(
-      new Request("https://connections.internal/resolve/dns", { headers: header(base) }),
-    );
+    const resolved = await service.handle(base, new Request("https://connections.internal/resolve/dns"));
     expect(resolved.status).toBe(200);
     const body = (await resolved.json()) as {
       available: boolean;
@@ -441,16 +421,16 @@ describe("http surface (behind the tpx-web forwarder)", () => {
       suppliedBy: "connection-base",
     });
 
-    const forbidden = await service.fetch(
-      new Request("https://connections.internal/resolve/dns", {
-        headers: header(without("tpx.connections.usage.read")),
-      }),
+    const forbidden = await service.handle(
+      without("tpx.connections.usage.read"),
+      new Request("https://connections.internal/resolve/dns"),
     );
     expect(forbidden.status).toBe(403);
     expect(await forbidden.json()).toMatchObject({ code: "forbidden" });
 
-    const badBody = await service.fetch(
-      new Request("https://connections.internal/execute/dns", { method: "POST", headers: header(base), body: "nope" }),
+    const badBody = await service.handle(
+      base,
+      new Request("https://connections.internal/execute/dns", { method: "POST", body: "nope" }),
     );
     expect(badBody.status).toBe(400);
   });

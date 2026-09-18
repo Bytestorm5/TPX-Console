@@ -1,15 +1,17 @@
 /**
- * Router contexts. The worker entry sets `cloudflareContext`; middleware sets
- * the identity, tenant and scope contexts top-down, so every loader below
- * reads a resolved, authorized session instead of re-deriving it.
+ * Router contexts. The Worker entry sets `cloudflareContext` (the env, the
+ * execution context and the mounted services); middleware sets the identity,
+ * tenant and scope contexts top-down, so every loader below reads a resolved,
+ * authorized session instead of re-deriving it.
  */
 import { createContext } from "react-router";
 import type { Environment, Project, Tenant, TenantSummary } from "@tpx/contracts/auth";
 import type { Ctx, TenantCtx } from "@tpx/contracts/scope";
 import type { SessionIdentity } from "@tpx/identity";
 import type { WebEnv } from "./env.ts";
+import type { Services } from "./services.server.ts";
 
-export const cloudflareContext = createContext<{ env: WebEnv; ctx: ExecutionContext }>();
+export const cloudflareContext = createContext<{ env: WebEnv; ctx: ExecutionContext; services: Services }>();
 
 export type SignedInIdentity = SessionIdentity & { userId: string };
 

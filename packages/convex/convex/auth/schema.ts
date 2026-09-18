@@ -1,5 +1,5 @@
 /**
- * tpx-auth's tables (prefix `auth_`): tenancy (tenants, projects,
+ * The auth service's tables (prefix `auth_`): tenancy (tenants, projects,
  * environments, users, memberships, invites, the tenant audit log) and the
  * Alfiz storage seam (grants, revokes, roles, groups, users, requests,
  * catalog, audit, the persisted invalidation log).

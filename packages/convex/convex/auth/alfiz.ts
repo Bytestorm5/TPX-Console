@@ -1,7 +1,7 @@
 /**
  * The Alfiz storage seam as Convex functions — one internal function per
  * StorageDriver method. Internal, so nothing outside the deployment can call
- * them; the Worker reaches them over the HTTP API with the deploy key.
+ * them; the console Worker reaches them over the HTTP API with the deploy key.
  *
  * Semantics match the reference memory driver exactly (filters, audit
  * paging, the contiguous event log) and are pinned by the Alfiz driver
